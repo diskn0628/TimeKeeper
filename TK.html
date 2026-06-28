@@ -1,0 +1,2310 @@
+```html
+<!doctype html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover, user-scalable=no" />
+  <title>Timekeeper iPhone</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- React & Babel CDN -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- SortableJS CDN (滑らかで安定したiPhoneライク並び替え用) -->
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+
+  <!-- Google Fonts -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap" />
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            bg: '#06060e',
+            surface: '#0f0f1c',
+            card: '#131325',
+            cardHover: '#181830',
+            border: '#22223a',
+            amberCustom: '#f0a030',
+            amberDim: '#6b4814',
+            redCustom: '#ff4a4a',
+            redGlow: 'rgba(255,74,74,0.2)',
+            greenCustom: '#28e07a',
+            greenGlow: 'rgba(40,224,122,0.15)',
+            blueCustom: '#60a8ff',
+            whiteCustom: '#dce0f8',
+            grayCustom: '#44445a',
+            mutedCustom: '#666688',
+            mutedLight: '#8888aa',
+          },
+          fontFamily: {
+            mono: ["'Share Tech Mono'", "monospace"],
+            sans: ["'Rajdhani'", "system-ui", "sans-serif"],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    html, body {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #06060e;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+    #root {
+      position: absolute;
+      inset: 0;
+      height: 100%;
+    }
+    /* カスタムスクロールバー */
+    ::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #22223a;
+      border-radius: 2px;
+    }
+
+    /* SortableJS 長押しドラッグ時の琥珀ネオンプレビュー効果 */
+    .sortable-ghost {
+      opacity: 0.25;
+      background-color: #0c0c16 !important;
+      border: 1px dashed #f0a030 !important;
+    }
+    .sortable-chosen {
+      box-shadow: 0 15px 30px rgba(0, 0, 0, 0.85), 0 0 16px rgba(240,160,48,0.3) !important;
+      transform: scale(1.03);
+      background-color: rgba(240,160,48,0.12) !important;
+      border-color: #f0a030 !important;
+      z-index: 50;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // カラー定義とデザイン設定
+    const colors = {
+      bg: '#06060e',
+      surface: '#0f0f1c',
+      card: '#131325',
+      cardHover: '#181830',
+      border: '#22223a',
+      amber: '#f0a030',
+      amberDim: '#6b4814',
+      amberGlow: 'rgba(240,160,48,0.15)',
+      red: '#ff4a4a',
+      redGlow: 'rgba(255,74,74,0.2)',
+      green: '#28e07a',
+      greenGlow: 'rgba(40,224,122,0.15)',
+      blue: '#60a8ff',
+      blueGlow: 'rgba(96,168,255,0.15)',
+      white: '#dce0f8',
+      gray: '#44445a',
+      muted: '#666688',
+      mutedLight: '#8888aa',
+      mono: "'Share Tech Mono','Courier New',monospace",
+      sans: "'Rajdhani',system-ui,sans-serif"
+    };
+
+    const labelStyle = {
+      fontSize: 9,
+      letterSpacing: 4,
+      color: colors.muted,
+      textTransform: 'uppercase',
+      fontFamily: colors.sans,
+      fontWeight: 600
+    };
+
+    // 共通時間処理ヘルパー
+    const pad = (num) => String(Math.abs(Math.floor(num))).padStart(2, "0");
+
+    // ミリ秒をフォーマット
+    function formatTime(ms) {
+      const abs = Math.abs(ms);
+      const h = Math.floor(abs / 3600000);
+      const m = Math.floor((abs % 3600000) / 60000);
+      const s = Math.floor((abs % 60000) / 1000);
+      const sign = ms < 0 ? "−" : "";
+      if (h > 0) {
+        return sign + `${pad(h)}:${pad(m)}:${pad(s)}`;
+      }
+      return sign + `${pad(m)}:${pad(s)}`;
+    }
+
+    // 常に hh:mm:ss 形式で出力するフォーマット
+    function formatFullHMS(ms) {
+      const abs = Math.abs(ms);
+      const h = Math.floor(abs / 3600000);
+      const m = Math.floor((abs % 3600000) / 60000);
+      const s = Math.floor((abs % 60000) / 1000);
+      const sign = ms < 0 ? "−" : "";
+      return sign + `${pad(h)}:${pad(m)}:${pad(s)}`;
+    }
+
+    // ミリ秒精度を含むフォーマット
+    function formatTimeMs(ms) {
+      const abs = Math.abs(ms);
+      const h = Math.floor(abs / 3600000);
+      const m = Math.floor((abs % 3600000) / 60000);
+      const s = Math.floor((abs % 60000) / 1000);
+      const centi = Math.floor((abs % 1000) / 10);
+      const sign = ms < 0 ? "−" : "";
+      const timeStr = h > 0 
+        ? `${pad(h)}:${pad(m)}:${pad(s)}` 
+        : `${pad(Math.floor(abs / 60000))}:${pad(s)}`;
+      return `${sign}${timeStr}.${pad(centi)}`;
+    }
+
+    // 文字列をパース
+    function parseInputDigits(str) {
+      const clean = str.trim();
+      if (!clean) return null;
+
+      if (clean.endsWith("s")) {
+        const val = parseInt(clean.replace(/\D/g, ""), 10);
+        if (isNaN(val)) return null;
+        const ms = val * 1000;
+        const h = Math.floor(ms / 3600000);
+        const m = Math.floor((ms % 3600000) / 60000);
+        const s = Math.floor((ms % 60000) / 1000);
+        return { h, m, s, ms, str: `${val}秒 (${pad(h)}:${pad(m)}:${pad(s)})` };
+      }
+
+      if (clean.endsWith("m")) {
+        const val = parseInt(clean.replace(/\D/g, ""), 10);
+        if (isNaN(val)) return null;
+        const ms = val * 60000;
+        const h = Math.floor(ms / 3600000);
+        const m = Math.floor((ms % 3600000) / 60000);
+        const s = Math.floor((ms % 60000) / 1000);
+        return { h, m, s, ms, str: `${val}分 (${pad(h)}:${pad(m)}:${pad(s)})` };
+      }
+
+      const digits = clean.replace(/\D/g, "").slice(0, 6);
+      if (!digits) return null;
+      const padded = digits.padStart(6, "0");
+      const s = parseInt(padded.slice(4, 6), 10);
+      const m = parseInt(padded.slice(2, 4), 10);
+      const h = parseInt(padded.slice(0, 2), 10);
+      if (s >= 60 || m >= 60) return null;
+      const ms = (h * 3600 + m * 60 + s) * 1000;
+      return { h, m, s, ms, str: `${pad(h)}:${pad(m)}:${pad(s)}` };
+    }
+
+    // 電卓用の時間数式パース処理
+    function parseCalculatorFormula(expr) {
+      if (!expr) return 0;
+      const tokens = expr.split(/([+-])/).filter(t => t !== "");
+      let totalMs = 0;
+      let currentOp = "+";
+      for (const token of tokens) {
+        if (token === "+" || token === "-") {
+          currentOp = token;
+          continue;
+        }
+        const parsed = parseInputDigits(token);
+        const ms = parsed ? parsed.ms : 0;
+        totalMs = currentOp === "+" ? totalMs + ms : totalMs - ms;
+      }
+      return totalMs;
+    }
+
+    // 電卓数式の表示用整形
+    function formatCalculatorFormula(expr) {
+      if (!expr) return "";
+      return expr.split(/([+-])/).map(token => {
+        if (token === "+" || token === "-") return token;
+        const parsed = parseInputDigits(token);
+        if (!parsed) return token;
+
+        if (token.endsWith("s") || token.endsWith("m")) {
+          return token;
+        }
+
+        const ms = parsed.ms;
+        const h = Math.floor(ms / 3600000);
+        return h > 0 
+          ? `${pad(h)}:${pad(Math.floor((ms % 3600000) / 60000))}:${pad(Math.floor((ms % 60000) / 1000))}` 
+          : `${pad(Math.floor(ms / 60000))}:${pad(Math.floor((ms % 60000) / 1000))}`;
+      }).join("");
+    }
+
+    function endsWithOperator(expr) {
+      return !!(expr && /[+-]$/.test(expr));
+    }
+
+    function roundUpToSecond(ms) {
+      return ms <= 0 ? 0 : Math.ceil(ms / 1000) * 1000;
+    }
+    
+    function formatTo6Digits(ms) {
+      const abs = Math.abs(ms);
+      const h = Math.floor(abs / 3600000);
+      const m = Math.floor((abs % 3600000) / 60000);
+      const s = Math.floor((abs % 60000) / 1000);
+      const sign = ms < 0 ? "-" : "";
+      return `${sign}${pad(h)}${pad(m)}${pad(s)}`;
+    }
+
+    // アニメーションループ再描画カスタムフック
+    function useAnimationFrameTrigger(active) {
+      const [, setTick] = useState(0);
+      const requestRef = useRef(null);
+
+      useEffect(() => {
+        if (!active) return;
+        let isCancelled = false;
+        const update = () => {
+          if (isCancelled) return;
+          setTick(prev => prev + 1);
+          requestRef.current = requestAnimationFrame(update);
+        };
+        requestRef.current = requestAnimationFrame(update);
+        return () => {
+          isCancelled = true;
+          if (requestRef.current) cancelAnimationFrame(requestRef.current);
+        };
+      }, [active]);
+    }
+
+    // 何秒早めるか設定コンポーネント
+    function QuickOffsetButton({ value, onChange }) {
+      const [showModal, setShowModal] = useState(false);
+      const [inputValue, setInputValue] = useState("2");
+      const timerRef = useRef(null);
+      const isLongPress = useRef(false);
+      const backupVal = useRef(value > 0 ? value : 2);
+      const isActive = value > 0;
+
+      const handlePointerDown = (e) => {
+        e.preventDefault();
+        isLongPress.current = false;
+        timerRef.current = setTimeout(() => {
+          isLongPress.current = true;
+          setInputValue(String(isActive ? value : backupVal.current));
+          setShowModal(true);
+        }, 500);
+      };
+
+      const handlePointerUp = () => {
+        clearTimeout(timerRef.current);
+        if (!isLongPress.current) {
+          if (isActive) {
+            backupVal.current = value;
+            onChange(0);
+          } else {
+            onChange(backupVal.current || 2);
+          }
+        }
+      };
+
+      const saveOffset = () => {
+        const val = parseInt(inputValue, 10);
+        if (!isNaN(val) && val > 0) {
+          backupVal.current = val;
+          onChange(val);
+        }
+        setShowModal(false);
+      };
+
+      return (
+        <>
+          <button
+            onPointerDown={handlePointerDown}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={() => clearTimeout(timerRef.current)}
+            onContextMenu={(e) => e.preventDefault()}
+            className="flex items-center gap-1 px-[9px] py-[3px] text-[9px] font-bold tracking-[2px] rounded-[6px] border cursor-pointer select-none transition-all duration-150 shrink-0 no-drag"
+            style={{
+              background: isActive ? colors.amberGlow : 'transparent',
+              borderColor: isActive ? colors.amber : colors.border,
+              color: isActive ? colors.amber : colors.muted,
+            }}
+          >
+            <span 
+              className="w-[7px] h-[7px] rounded-full inline-block shrink-0 transition-all duration-150" 
+              style={{
+                background: isActive ? colors.amber : colors.gray,
+                boxShadow: isActive ? `0 0 5px ${colors.amber}` : 'none'
+              }}
+            />
+            −{isActive ? value : backupVal.current}秒
+          </button>
+
+          {showModal && (
+            <div 
+              className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-[6px] flex items-center justify-center p-5"
+              onClick={() => setShowModal(false)}
+            >
+              <div 
+                className="bg-card border border-border rounded-[20px] p-[22px] w-full max-w-[320px]"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ ...labelStyle, marginBottom: 14 }}>何秒早めるか設定</div>
+                <input
+                  autoFocus
+                  type="tel"
+                  inputMode="numeric"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value.replace(/\D/g, "").slice(0, 3))}
+                  onKeyDown={(e) => e.key === "Enter" && saveOffset()}
+                  className="bg-bg border border-amberCustom rounded-[10px] px-[14px] py-3 text-amberCustom text-[26px] font-mono tracking-[4px] outline-none w-full box-border mb-1.5 text-center"
+                />
+                <div className="font-mono text-xs text-mutedCustom mb-3.5 text-center tracking-[1px]">
+                  {inputValue ? `ターゲットの ${inputValue} 秒前にタイムアップ` : "秒数を入力"}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={saveOffset}
+                    className="flex-[2] py-3 bg-amberCustom rounded-[10px] text-bg text-xs tracking-[2px] font-sans font-bold cursor-pointer border-none"
+                  >
+                    ✓ 設定
+                  </button>
+                  <button
+                    onClick={() => setShowModal(false)}
+                    className="flex-[1] py-3 bg-surface border border-border rounded-[10px] text-mutedCustom text-xs font-sans cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      );
+    }
+
+    // 時刻手動設定ダイアログ付き現在時刻・オフセット時計
+    function HeaderClock({ offsetMs, setOffsetMs }) {
+      const [, setTick] = useState(0);
+      const [showModal, setShowModal] = useState(false);
+      const [inputValue, setInputValue] = useState("");
+      const timerRef = useRef(null);
+
+      useEffect(() => {
+        const interval = setInterval(() => setTick(prev => prev + 1), 200);
+        return () => clearInterval(interval);
+      }, []);
+
+      const targetTime = new Date(Date.now() + offsetMs);
+
+      const handlePointerDown = (e) => {
+        e.preventDefault();
+        timerRef.current = setTimeout(() => {
+          setInputValue(`${pad(targetTime.getHours())}${pad(targetTime.getMinutes())}${pad(targetTime.getSeconds())}`);
+          setShowModal(true);
+        }, 600);
+      };
+
+      const handlePointerUp = () => clearTimeout(timerRef.current);
+
+      const saveManualTime = () => {
+        const parsed = parseInputDigits(inputValue);
+        if (!parsed) return;
+        const now = new Date();
+        const targetDate = new Date(now);
+        targetDate.setHours(parsed.h, parsed.m, parsed.s, 0);
+        setOffsetMs(targetDate.getTime() - now.getTime());
+        setShowModal(false);
+      };
+
+      return (
+        <>
+          <div
+            onPointerDown={handlePointerDown}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={handlePointerUp}
+            className="text-right cursor-pointer select-none leading-[1.2]"
+          >
+            <div 
+              className="font-mono text-[27px] tracking-[1px] flex items-center justify-end"
+              style={{ color: offsetMs !== 0 ? colors.amber : colors.white }}
+            >
+              {pad(targetTime.getHours())}:{pad(targetTime.getMinutes())}:{pad(targetTime.getSeconds())}
+              {offsetMs !== 0 && <span className="text-[13px] ml-1 text-amberCustom">★</span>}
+            </div>
+            <div style={{ ...labelStyle, fontSize: 13, marginTop: 2 }}>
+              {targetTime.toLocaleDateString("ja-JP", { month: "short", day: "numeric", weekday: "short" })}
+            </div>
+          </div>
+
+          {showModal && (
+            <div
+              className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-[6px] flex items-center justify-center p-5"
+              onClick={() => setShowModal(false)}
+            >
+              <div
+                className="bg-card border border-border rounded-[20px] p-[22px] w-full max-w-[320px]"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ ...labelStyle, marginBottom: 14 }}>時刻を手動設定</div>
+                <input
+                  autoFocus
+                  type="tel"
+                  inputMode="numeric"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  onKeyDown={(e) => e.key === "Enter" && saveManualTime()}
+                  className="bg-bg border border-amberCustom rounded-[10px] px-[14px] py-3 text-amberCustom text-[26px] font-mono tracking-[4px] outline-none w-full box-border mb-1.5 text-center animate-none"
+                />
+                <div className="font-mono text-xs text-mutedCustom mb-3.5 pl-1 tracking-[2px]">
+                  {parseInputDigits(inputValue) ? `→ ${parseInputDigits(inputValue).str}` : "例: 143000 → 14:30:00"}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={saveManualTime}
+                    className="flex-[2] py-3 bg-amberCustom rounded-[10px] text-bg text-xs tracking-[2px] font-sans font-bold cursor-pointer border-none"
+                  >
+                    ✓ 設定
+                  </button>
+                  {offsetMs !== 0 && (
+                    <button
+                      onClick={() => { setOffsetMs(0); setShowModal(false); }}
+                      className="flex-[1] py-3 bg-surface border border-border rounded-[10px] text-mutedCustom text-xs font-sans cursor-pointer"
+                    >
+                      RST
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setShowModal(false)}
+                    className="flex-[1] py-3 bg-surface border border-border rounded-[10px] text-mutedCustom text-xs font-sans cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      );
+    }
+
+    // プリセットキーコンポーネント
+    function PresetKey({ preset, onTap, onLongPress }) {
+      const timerRef = useRef(null);
+      const isLongPress = useRef(false);
+
+      const handlePointerDown = (e) => {
+        e.preventDefault();
+        isLongPress.current = false;
+        timerRef.current = setTimeout(() => {
+          isLongPress.current = true;
+          onLongPress();
+        }, 600);
+      };
+
+      const handlePointerUp = () => {
+        clearTimeout(timerRef.current);
+        if (!isLongPress.current) {
+          onTap();
+        }
+      };
+
+      return (
+        <button
+          onPointerDown={handlePointerDown}
+          onPointerUp={handlePointerUp}
+          onPointerLeave={() => clearTimeout(timerRef.current)}
+          onContextMenu={(e) => e.preventDefault()}
+          className="px-3 py-1.2 bg-card border border-amberCustom rounded-[20px] text-amberCustom text-[11px] font-sans font-semibold cursor-pointer tracking-[0.5px] select-none no-drag animate-none"
+        >
+          {preset.label}
+          <span className="text-amberDim ml-1.2 text-[10px]">{preset.str}</span>
+        </button>
+      );
+    }
+
+    // カウントダウンアイテムコンポーネント (SortableJS適用のため Pointer Events 制御はすべて排除)
+    function CountdownItem({ item, onDelete, onMoveUp, onMoveDown, isFirst, isLast, steal, onOpenOutput }) {
+      const diffMs = item.target - Date.now() - (steal > 0 ? steal * 1000 : 0);
+      const isPast = diffMs <= 0;
+      const isNear = diffMs > 0 && diffMs < 60000;
+      const currentColor = isPast ? colors.red : isNear ? colors.amber : colors.white;
+      const displayMs = isPast ? Math.abs(diffMs) : roundUpToSecond(diffMs);
+
+      const [translateX, setTranslateX] = useState(0);
+      const [isSwiping, setIsSwiping] = useState(false);
+      
+      const startX = useRef(0);
+      const isSwipedOpen = useRef(false);
+      const lastTapTime = useRef(0);
+      const swipeLimit = 78;
+
+      const handleTouchStart = (e) => {
+        if (e.target.closest('.no-drag')) return;
+        startX.current = e.touches[0].clientX;
+        setIsSwiping(true);
+      };
+
+      const handleTouchMove = (e) => {
+        if (!isSwiping) return;
+        const deltaX = e.touches[0].clientX - startX.current;
+        let tx = (isSwipedOpen.current ? -swipeLimit : 0) + deltaX;
+        tx = Math.max(-swipeLimit, Math.min(0, tx));
+        setTranslateX(tx);
+      };
+
+      const handleTouchEnd = () => {
+        setIsSwiping(false);
+        if (translateX < -swipeLimit * 0.45) {
+          setTranslateX(-swipeLimit);
+          isSwipedOpen.current = true;
+        } else {
+          setTranslateX(0);
+          isSwipedOpen.current = false;
+        }
+      };
+
+      const handleTapAction = (e) => {
+        if (e.target.closest('.no-drag')) return;
+        if (isSwipedOpen.current) {
+          setTranslateX(0);
+          isSwipedOpen.current = false;
+          return;
+        }
+        const now = Date.now();
+        if (now - lastTapTime.current < 350) {
+          lastTapTime.current = 0;
+          if (onOpenOutput) onOpenOutput(item.id);
+        } else {
+          lastTapTime.current = now;
+        }
+      };
+
+      const targetTimeString = new Date(item.target).toLocaleTimeString("ja-JP", {
+        hour: "2-digit", minute: "2-digit", second: "2-digit"
+      });
+
+      return (
+        <div data-id={item.id} className="relative overflow-hidden rounded-xl mb-1.5" style={{ height: '74px' }}>
+          <div className="absolute inset-y-0 right-0 w-[78px] flex no-drag">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(item.id);
+              }}
+              className="flex-1 border-none bg-redCustom text-white font-sans text-xs font-bold cursor-pointer font-sans"
+            >
+              🗑<br />削除
+            </button>
+          </div>
+
+          <div
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onClick={handleTapAction}
+            className="relative bg-card border rounded-xl p-[9px_10px] flex items-center gap-2 select-none h-full transition-[border-color,box-shadow,transform] cursor-grab active:cursor-grabbing"
+            style={{
+              borderColor: isPast ? colors.red : isNear ? colors.amber : colors.border,
+              boxShadow: isPast ? `0 0 12px ${colors.redGlow}` : "none",
+              transform: `translateX(${translateX}px)`,
+              touchAction: 'pan-y'
+            }}
+          >
+            <div 
+              className="absolute left-0 top-0 bottom-0 w-[3px] rounded-[12px_0_0_12px]" 
+              style={{ background: currentColor, opacity: isPast ? 1 : isNear ? 0.9 : 0.35 }}
+            />
+            
+            <div className="flex flex-col gap-[2px] pl-1.5 shrink-0 no-drag">
+              <button 
+                onClick={(e) => { e.stopPropagation(); onMoveUp(); }}
+                className="text-[12px] leading-none cursor-pointer p-1 bg-transparent border-none outline-none active:scale-125 font-sans"
+                style={{ color: isFirst ? colors.border : colors.muted, opacity: isFirst ? 0.15 : 0.7 }}
+                disabled={isFirst}
+              >
+                ▲
+              </button>
+              <button 
+                onClick={(e) => { e.stopPropagation(); onMoveDown(); }}
+                className="text-[12px] leading-none cursor-pointer p-1 bg-transparent border-none outline-none active:scale-125 font-sans"
+                style={{ color: isLast ? colors.border : colors.muted, opacity: isLast ? 0.15 : 0.7 }}
+                disabled={isLast}
+              >
+                ▼
+              </button>
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <div className="font-sans text-[15px] color-gray mb-[2px] tracking-[0.5px] flex items-baseline gap-1.5 overflow-hidden whitespace-nowrap">
+                {item.label && <span className="text-grayCustom overflow-hidden text-ellipsis font-bold">{item.label}</span>}
+                <span className="font-mono text-[13px] text-mutedCustom shrink-0">→ {targetTimeString}</span>
+                {steal > 0 && <span className="text-amberDim text-[11px] shrink-0">−{steal}s</span>}
+                {isPast && <span className="text-redCustom text-[11px] shrink-0 font-bold">経過</span>}
+                {isNear && !isPast && <span className="text-amberCustom text-[11px] shrink-0">⚡</span>}
+              </div>
+              <div 
+                className="font-mono text-[38px] font-bold tracking-[1px] leading-[1.05]"
+                style={{ color: currentColor }}
+              >
+                {isPast ? "+" : ""}{formatTime(displayMs)}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // カウントダウンリストマネージャー
+    function CountdownManager({ targets, setTargets, clipboardVal, stealSec, setStealSec, onOpenOutput }) {
+      const [inputVal, setInputVal] = useState("");
+      const [labelVal, setLabelVal] = useState("");
+      const [presets, setPresets] = useState(() => {
+        try {
+          return JSON.parse(localStorage.getItem("tk_cd_presets") || "[]");
+        } catch(_) { return []; }
+      });
+      const [showSave, setShowSave] = useState(false);
+      const [orderList, setOrderList] = useState([]);
+      const [anyDragging, setAnyDragging] = useState(false);
+
+      const inputRef = useRef(null);
+      const scrollContainerRef = useRef(null);
+
+      useAnimationFrameTrigger(true);
+
+      // SortableJSの初期化＆ReactのStateの完璧な双方向バインド (依存配列を空にして無限マウントループを根絶！)
+      useEffect(() => {
+        if (!scrollContainerRef.current) return;
+
+        const sortable = Sortable.create(scrollContainerRef.current, {
+          delay: 400, // 長押し0.4秒
+          delayOnTouchOnly: true, // タッチデバイスのみディレイ
+          touchStartThreshold: 5, // タッチ中に指が少し動いたらキャンセル
+          animation: 200, // スライドのスピード
+          ghostClass: 'sortable-ghost', // ドラッグ跡地
+          chosenClass: 'sortable-chosen', // ドラッグ対象
+          filter: '.no-drag', // ドラッグ禁止領域のクラス
+          preventOnFilter: false, // 外部ブラウザでのボタン動作不全を100%解決
+          
+          onStart: function () {
+            setAnyDragging(true);
+            if (navigator.vibrate) {
+              navigator.vibrate(30); // わずかにバイブレーション
+            }
+          },
+          onEnd: function (evt) {
+            setAnyDragging(false);
+            
+            // SortableJSが物理的に移動させたDOMノードを一度元の位置に戻す
+            if (evt.oldIndex !== evt.newIndex) {
+              const parent = evt.from;
+              const item = evt.item;
+              const referenceNode = parent.children[evt.oldIndex > evt.newIndex ? evt.oldIndex + 1 : evt.oldIndex];
+              
+              // 1. まず SortableJS が並び替えた現在のDOM配列に基づいて「新しいID順序（数値型）」を取得する
+              const newOrder = Array.from(parent.children).map(el => Number(el.getAttribute('data-id')));
+              
+              // 2. 次に SortableJS の物理移動をリセットし、親要素に元のDOM順序を復元する
+              parent.insertBefore(item, referenceNode);
+
+              // 3. ReactのStateを新しい順序に更新する。これで仮想DOMと物理DOMが完璧に一致して並び替わります
+              setOrderList(newOrder);
+            }
+          }
+        });
+
+        return () => {
+          sortable.destroy();
+        };
+      }, []); // 空の配列により安定生成を保証
+
+      useEffect(() => {
+        if (clipboardVal) setInputVal(clipboardVal);
+      }, [clipboardVal]);
+
+      useEffect(() => {
+        setOrderList(prev => {
+          const ids = targets.map(t => t.id);
+          const filtered = prev.filter(id => ids.includes(id));
+          const added = ids.filter(id => !filtered.includes(id));
+          return [...filtered, ...added];
+        });
+      }, [targets]);
+
+      const addTarget = (rawTime, label) => {
+        const parsed = parseInputDigits(rawTime);
+        if (!parsed) return;
+        const now = new Date();
+        now.setHours(parsed.h, parsed.m, parsed.s, 0);
+        let targetMs = now.getTime();
+        if (targetMs <= Date.now()) {
+          targetMs += 86400000;
+        }
+        setTargets(prev => [...prev, { id: Date.now(), target: targetMs, label }]);
+      };
+
+      const handleAddSubmit = () => {
+        if (parsedInput) {
+          addTarget(inputVal, labelVal);
+          setLabelVal("");
+          setInputVal("");
+          inputRef.current?.focus();
+        }
+      };
+
+      const saveAsPreset = () => {
+        if (!parsedInput) return;
+        const defaultLabel = labelVal || parsedInput.str;
+        const newPresets = [...presets, { id: Date.now(), raw: inputVal, label: defaultLabel, str: parsedInput.str }];
+        setPresets(newPresets);
+        try { localStorage.setItem("tk_cd_presets", JSON.stringify(newPresets)); } catch(_) {}
+        setShowSave(false);
+        setLabelVal("");
+        setInputVal("");
+      };
+
+      const deletePreset = (id) => {
+        const updated = presets.filter(p => p.id !== id);
+        setPresets(updated);
+        try { localStorage.setItem("tk_cd_presets", JSON.stringify(updated)); } catch(_) {}
+      };
+
+      const reorderItems = (index, direction) => {
+        setOrderList(prev => {
+          const next = [...prev];
+          const swapIdx = index + direction;
+          if (swapIdx < 0 || swapIdx >= next.length) return prev;
+          [next[index], next[swapIdx]] = [next[swapIdx], next[index]];
+          return next;
+        });
+      };
+
+      const sortedTargets = orderList.map(id => targets.find(t => t.id === id)).filter(Boolean);
+      const parsedInput = parseInputDigits(inputVal);
+
+      return (
+        <div className="h-full flex flex-col p-[10px_12px] gap-1.5 overflow-hidden">
+          <div className="shrink-0 no-drag">
+            <div style={{ ...labelStyle, fontSize: 8, marginBottom: 5 }}>
+              プリセット <span className="opacity-40">長押しで削除</span>
+            </div>
+            <div className="flex gap-[5px] flex-wrap">
+              {presets.map(p => (
+                <PresetKey 
+                  key={p.id} 
+                  preset={p} 
+                  onTap={() => addTarget(p.raw, p.label)} 
+                  onLongPress={() => deletePreset(p.id)}
+                />
+              ))}
+              <button
+                onClick={() => setShowSave(prev => !prev)}
+                className="px-2.5 py-1.2 rounded-[20px] text-[11px] font-sans tracking-[1px] cursor-pointer"
+                style={{
+                  background: showSave ? colors.amberGlow : colors.card,
+                  border: `1px solid ${showSave ? colors.amber : colors.border}`,
+                  color: showSave ? colors.amber : colors.muted
+                }}
+              >
+                ＋ 保存
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-card rounded-xl p-[9px_11px] border border-border shrink-0 no-drag">
+            <div className="flex justify-between items-center mb-1.5">
+              <div style={{ ...labelStyle, fontSize: 8 }}>時刻追加</div>
+              <QuickOffsetButton value={stealSec} onChange={setStealSec} />
+            </div>
+
+            <div className="relative mb-1.5">
+              <input
+                ref={inputRef}
+                type="tel"
+                inputMode="numeric"
+                value={inputVal}
+                onChange={(e) => setInputVal(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                onKeyDown={(e) => e.key === "Enter" && handleAddSubmit()}
+                placeholder="時刻 (例: 1430)"
+                className="bg-bg border border-border rounded-lg p-[7px_66px_7px_10px] text-amberCustom text-19 font-mono tracking-[3px] outline-none w-full box-border text-center animate-none"
+              />
+              {parsedInput && (
+                <div className="absolute right-2.5 top-1/2 -translate-y-1/2 font-mono text-[11px] text-amberDim pointer-events-none animate-none">
+                  {parsedInput.str}
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-1.5">
+              <input
+                type="text"
+                value={labelVal}
+                onChange={(e) => setLabelVal(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && (showSave ? saveAsPreset() : handleAddSubmit())}
+                placeholder="ラベル（省略可）"
+                className="flex-1 bg-bg border border-border rounded-lg p-[6px_10px] text-mutedLight text-16 font-sans outline-none animate-none"
+              />
+              {showSave ? (
+                <button
+                  onClick={saveAsPreset}
+                  disabled={!parsedInput}
+                  className="px-3 py-1.5 bg-amberCustom rounded-lg text-bg text-[11px] font-sans font-bold cursor-pointer whitespace-nowrap font-sans"
+                  style={{ opacity: parsedInput ? 1 : 0.5 }}
+                >
+                  💾 保存
+                </button>
+              ) : (
+                <button
+                  onClick={handleAddSubmit}
+                  disabled={!parsedInput}
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-sans font-bold cursor-pointer font-sans"
+                  style={{
+                    background: parsedInput ? colors.amber : colors.gray,
+                    color: parsedInput ? "#06060e" : colors.muted
+                  }}
+                >
+                  ＋
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div 
+            ref={scrollContainerRef}
+            className={`flex-1 ${anyDragging ? 'overflow-hidden' : 'overflow-y-auto'}`}
+          >
+            {sortedTargets.length === 0 ? (
+              <div className="text-center py-[22px] text-mutedCustom font-sans text-xs border border-dashed border-border rounded-xl no-drag">
+                ⏳ カウントダウンを追加<br />
+                <span className="text-[10px] opacity-50">▲▼タップで並び替え・ダブルタップで小窓化</span>
+              </div>
+            ) : (
+              sortedTargets.map((item, idx) => (
+                <CountdownItem
+                  key={item.id}
+                  item={item}
+                  steal={stealSec}
+                  isFirst={idx === 0}
+                  isLast={idx === sortedTargets.length - 1}
+                  onDelete={(id) => setTargets(prev => prev.filter(t => t.id !== id))}
+                  onMoveUp={() => reorderItems(idx, -1)}
+                  onMoveDown={() => reorderItems(idx, 1)}
+                  onOpenOutput={onOpenOutput}
+                />
+              ))
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // タイマーアイテムコンポーネント (Pointer Event による SortableJS インターセプト保護を完全に撤去し onClick へ安全配置)
+    function TimerItem({ timer, onUpdate, onDelete, onMoveUp, onMoveDown, isFirst, isLast, steal, onOpenOutput }) {
+      useAnimationFrameTrigger(timer.running);
+
+      const [translateX, setTranslateX] = useState(0);
+      const [isSwiping, setIsSwiping] = useState(false);
+
+      const startX = useRef(0);
+      const isSwipedOpen = useRef(false);
+      const lastTapTime = useRef(0);
+      const swipeLimit = 78;
+
+      const deltaMs = timer.running ? timer.endAt - Date.now() : timer.remaining;
+      const isOver = deltaMs < 0 && timer.running;
+      const offsetMs = steal > 0 ? deltaMs - (steal * 1000) : deltaMs;
+      
+      const progress = timer.totalMs > 0 ? Math.max(0, Math.min(1, deltaMs / timer.totalMs)) : 1;
+      const isNearEnd = !isOver && offsetMs < 10000 && offsetMs > 0 && timer.running;
+      const currentColor = isOver ? colors.red : timer.done ? colors.green : isNearEnd ? colors.amber : colors.blue;
+      const displayMs = timer.done ? 0 : isOver ? deltaMs : roundUpToSecond(Math.max(0, offsetMs));
+
+      const handleTouchStart = (e) => {
+        if (e.target.closest('.no-drag')) return;
+        startX.current = e.touches[0].clientX;
+        setIsSwiping(true);
+      };
+
+      const handleTouchMove = (e) => {
+        if (!isSwiping) return;
+        const deltaX = e.touches[0].clientX - startX.current;
+        let tx = (isSwipedOpen.current ? -swipeLimit : 0) + deltaX;
+        tx = Math.max(-swipeLimit, Math.min(0, tx));
+        setTranslateX(tx);
+      };
+
+      const handleTouchEnd = () => {
+        setIsSwiping(false);
+        if (translateX < -swipeLimit * 0.45) {
+          setTranslateX(-swipeLimit);
+          isSwipedOpen.current = true;
+        } else {
+          setTranslateX(0);
+          isSwipedOpen.current = false;
+        }
+      };
+
+      const handleTapAction = (e) => {
+        if (e.target.closest('.no-drag')) return;
+        if (isSwipedOpen.current) {
+          setTranslateX(0);
+          isSwipedOpen.current = false;
+          return;
+        }
+        const now = Date.now();
+        if (now - lastTapTime.current < 350) {
+          lastTapTime.current = 0;
+          if (onOpenOutput) onOpenOutput(timer.id);
+        } else {
+          lastTapTime.current = now;
+        }
+      };
+
+      const formattedTotal = formatTime(timer.totalMs);
+      const displayLabel = timer.label 
+        ? `${timer.label} → ${formattedTotal}` 
+        : formattedTotal;
+
+      return (
+        <div data-id={timer.id} className="relative overflow-hidden rounded-xl mb-[6px]" style={{ height: '110px' }}>
+          <div className="absolute inset-y-0 right-0 w-[78px] flex no-drag">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(timer.id);
+              }}
+              className="flex-1 border-none bg-redCustom text-white font-sans text-xs font-bold cursor-pointer font-sans"
+            >
+              🗑<br />削除
+            </button>
+          </div>
+
+          <div
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onClick={handleTapAction}
+            className="relative bg-card border rounded-xl p-[10px_12px_0] select-none h-full transition-[border-color,box-shadow,transform] cursor-grab active:cursor-grabbing"
+            style={{
+              borderColor: isOver ? colors.red : timer.done ? colors.green : isNearEnd ? colors.amber : timer.running ? colors.blue + "55" : colors.border,
+              boxShadow: isOver ? `0 0 12px ${colors.redGlow}` : "none",
+              transform: `translateX(${translateX}px)`,
+              touchAction: 'pan-y'
+            }}
+          >
+            <div className="flex items-center justify-between gap-[8px] pb-2.5">
+              {/* 左側矢印ボタン */}
+              <div className="flex flex-col gap-[3px] shrink-0 no-drag">
+                <button 
+                  onClick={(e) => { e.stopPropagation(); onMoveUp(); }}
+                  className="text-[14px] leading-none cursor-pointer p-1 bg-transparent border-none outline-none active:scale-125 font-sans"
+                  style={{ color: isFirst ? colors.border : colors.muted, opacity: isFirst ? 0.15 : 0.7 }}
+                  disabled={isFirst}
+                >
+                  ▲
+                </button>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); onMoveDown(); }}
+                  className="text-[14px] leading-none cursor-pointer p-1 bg-transparent border-none outline-none active:scale-125 font-sans"
+                  style={{ color: isLast ? colors.border : colors.muted, opacity: isLast ? 0.15 : 0.7 }}
+                  disabled={isLast}
+                >
+                  ▼
+                </button>
+              </div>
+
+              {/* 中央巨大数字＆ラベル（設定値統合表示） */}
+              <div className="flex-1 min-w-0 px-1">
+                <div className="font-sans text-[22px] font-bold text-whiteCustom leading-tight overflow-hidden text-ellipsis whitespace-nowrap">
+                  {displayLabel}
+                </div>
+                <div 
+                  className="font-mono text-[54px] font-extrabold tracking-tighter leading-none" 
+                  style={{ color: currentColor, textShadow: timer.running ? `0 0 10px ${currentColor}33` : "none" }}
+                >
+                  {timer.done ? "完了" : formatTime(displayMs)}
+                </div>
+              </div>
+
+              {/* 右側ボタン：標準の onClick で完動させ、stopPropagation で SortableJS の誤作動のみ確実に防御！ */}
+              <div className="flex flex-col gap-[6px] shrink-0 w-[84px] no-drag">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onUpdate({ ...timer, running: false, remaining: timer.totalMs, done: false });
+                  }}
+                  className="w-full h-[36px] p-0 bg-surface border border-border rounded-[9px] text-mutedCustom text-15 font-sans cursor-pointer flex items-center justify-center font-sans"
+                >
+                  ↺
+                </button>
+                {!timer.running && !timer.done && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const limit = Date.now() + (timer.remaining > 0 ? timer.remaining : timer.totalMs);
+                      onUpdate({ ...timer, running: true, endAt: limit, done: false });
+                    }}
+                    className="w-full h-[54px] bg-blueGlow border border-blueCustom rounded-lg text-blueCustom text-[12px] font-sans font-bold tracking-[1px] cursor-pointer flex items-center justify-center font-sans"
+                  >
+                    {timer.remaining > 0 && timer.remaining < timer.totalMs ? "▶再開" : "▶開始"}
+                  </button>
+                )}
+                {timer.running && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUpdate({ ...timer, running: false, remaining: Math.max(0, deltaMs) });
+                    }}
+                    className="w-full h-[54px] rounded-lg text-[12px] font-sans font-bold tracking-[1px] cursor-pointer flex items-center justify-center font-sans"
+                    style={{
+                      background: isOver ? "rgba(255,74,74,0.2)" : colors.amberGlow,
+                      border: `1px solid ${isOver ? colors.red : colors.amber}`,
+                      color: isOver ? colors.red : colors.amber
+                    }}
+                  >
+                    ⏸停止
+                  </button>
+                )}
+                {timer.done && (
+                  <div className="w-full h-[54px] flex items-center justify-center text-greenCustom text-[12px] font-sans font-bold font-sans">
+                    ✓完了
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* タイマー進捗バー */}
+            <div className="h-1 -mx-3 bg-border/20">
+              <div 
+                className="h-full transition-all"
+                style={{
+                  width: `${Math.max(0, Math.min(1, isOver ? 0 : progress)) * 100}%`,
+                  background: currentColor,
+                  transitionDuration: timer.running && !isOver ? "0s" : "0.15s"
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // 各プリセットボタン（長押し機能つき、選択状態の青ネオン枠光り仕様）
+    function CustomPresetButton({ preset, isSelected, onTap, onLongPress }) {
+      const timerRef = useRef(null);
+      const isLongPress = useRef(false);
+
+      const handlePointerDown = (e) => {
+        e.preventDefault();
+        isLongPress.current = false;
+        timerRef.current = setTimeout(() => {
+          isLongPress.current = true;
+          onLongPress();
+        }, 600);
+      };
+
+      const handlePointerUp = () => {
+        clearTimeout(timerRef.current);
+        if (!isLongPress.current) {
+          onTap();
+        }
+      };
+
+      return (
+        <button
+          onPointerDown={handlePointerDown}
+          onPointerUp={handlePointerUp}
+          onPointerLeave={() => clearTimeout(timerRef.current)}
+          onContextMenu={(e) => e.preventDefault()}
+          className="px-2.5 py-1 rounded-[7px] text-[11px] font-sans font-semibold cursor-pointer select-none active:scale-95 transition-all duration-200 shrink-0 font-sans"
+          style={{
+            background: isSelected ? 'rgba(96,168,255,0.12)' : colors.surface,
+            borderColor: isSelected ? colors.blueCustom : colors.border,
+            borderWidth: '1px',
+            borderStyle: 'solid',
+            color: isSelected ? colors.blueCustom : colors.mutedLight,
+            boxShadow: isSelected ? `0 0 12px rgba(96,168,255,0.7)` : 'none'
+          }}
+        >
+          {preset.l}
+        </button>
+      );
+    }
+
+    // タイマータブマネージャー
+    let timerUniqueId = 0;
+    function TimerManager({ timers, setTimers, clipboardVal, stealSec, setStealSec, onOpenOutput }) {
+      const [customInput, setCustomInput] = useState("");
+      const [labelVal, setLabelVal] = useState("");
+      const [selectedPresetMs, setSelectedPresetMs] = useState(0);
+      const [anyDragging, setAnyDragging] = useState(false);
+
+      const scrollContainerRef = useRef(null);
+
+      // ユーザー設定プリセット (永続化)
+      const [presets, setPresets] = useState(() => {
+        try {
+          const saved = localStorage.getItem("tk_tm_presets_v4");
+          return saved ? JSON.parse(saved) : [
+            { l: "1分", ms: 60000 },
+            { l: "2分", ms: 120000 },
+            { l: "3分", ms: 180000 },
+            { l: "5分", ms: 300000 }
+          ];
+        } catch(_) {
+          return [
+            { l: "1分", ms: 60000 },
+            { l: "2分", ms: 120000 },
+            { l: "3分", ms: 180000 },
+            { l: "5分", ms: 300000 }
+          ];
+        }
+      });
+
+      // プリセット作成・編集用モーダルステート
+      const [presetModalOpen, setPresetModalOpen] = useState(false);
+      const [presetEditTarget, setPresetEditTarget] = useState(null);
+      const [presetModalLabel, setPresetModalLabel] = useState("");
+      const [presetModalInput, setPresetModalInput] = useState("");
+
+      // SortableJSの初期化＆ReactのStateの完璧な双方向バインド (空の依存配列[]に固定して無限ループブラックアウトを完全防御！)
+      useEffect(() => {
+        if (!scrollContainerRef.current) return;
+
+        const sortable = Sortable.create(scrollContainerRef.current, {
+          delay: 400, // 長押し0.4秒
+          delayOnTouchOnly: true,
+          touchStartThreshold: 5,
+          animation: 200,
+          ghostClass: 'sortable-ghost',
+          chosenClass: 'sortable-chosen',
+          filter: '.no-drag',
+          preventOnFilter: false, // 標準のonClick判定を決してキャンセルしない
+          
+          onStart: function () {
+            setAnyDragging(true);
+            if (navigator.vibrate) {
+              navigator.vibrate(30);
+            }
+          },
+          onEnd: function (evt) {
+            setAnyDragging(false);
+            
+            // SortableJSが物理的に移動させたDOMノードを一度元の位置に戻す
+            if (evt.oldIndex !== evt.newIndex) {
+              const parent = evt.from;
+              const item = evt.item;
+              const referenceNode = parent.children[evt.oldIndex > evt.newIndex ? evt.oldIndex + 1 : evt.oldIndex];
+              
+              // 1. まず SortableJS が並び替えた現在のDOM配列に基づいて「新しいID順序（数値型）」を取得する
+              const newOrder = Array.from(parent.children).map(el => Number(el.getAttribute('data-id')));
+              
+              // 2. 次に SortableJS の物理移動をリセットし、親要素に元のDOM順序を復元する
+              parent.insertBefore(item, referenceNode);
+
+              // 3. ReactのStateを新しい順序に更新する
+              setTimers(prev => {
+                const next = [];
+                newOrder.forEach(id => {
+                  const found = prev.find(t => t.id === id);
+                  if (found) next.push(found);
+                });
+                return next;
+              });
+            }
+          }
+        });
+
+        return () => {
+          sortable.destroy();
+        };
+      }, []); // 依存配列を空にして無限再生成ループを防止
+
+      useEffect(() => {
+        if (clipboardVal) setCustomInput(clipboardVal);
+      }, [clipboardVal]);
+
+      const parsedCustom = parseInputDigits(customInput);
+      const targetMs = parsedCustom ? parsedCustom.ms : selectedPresetMs;
+
+      const createTimer = () => {
+        if (targetMs <= 0) return;
+        const newId = ++timerUniqueId;
+        setTimers(prev => [...prev, {
+          id: newId,
+          label: labelVal,
+          totalMs: targetMs,
+          remaining: targetMs,
+          running: false,
+          done: false,
+          endAt: null
+        }]);
+        setLabelVal("");
+        setCustomInput("");
+        setSelectedPresetMs(0);
+      };
+
+      const reorderTimers = (index, direction) => {
+        setTimers(prev => {
+          const next = [...prev];
+          const swapIdx = index + direction;
+          if (swapIdx < 0 || swapIdx >= next.length) return prev;
+          [next[index], next[swapIdx]] = [next[swapIdx], next[index]];
+          return next;
+        });
+      };
+
+      const openNewPresetDialog = () => {
+        setPresetEditTarget(null);
+        setPresetModalLabel(labelVal || "");
+        setPresetModalInput(customInput || (selectedPresetMs ? formatTo6Digits(selectedPresetMs) : ""));
+        setPresetModalOpen(true);
+      };
+
+      const openEditPresetDialog = (preset, idx) => {
+        setPresetEditTarget({ preset, index: idx });
+        setPresetModalLabel(preset.l);
+        setPresetModalInput(formatTo6Digits(preset.ms));
+        setPresetModalOpen(true);
+      };
+
+      const savePreset = () => {
+        const parsed = parseInputDigits(presetModalInput);
+        if (!parsed) return;
+        const l = presetModalLabel || formatFullHMS(parsed.ms);
+        const newPreset = { l, ms: parsed.ms };
+
+        let updated;
+        if (presetEditTarget !== null) {
+          updated = [...presets];
+          updated[presetEditTarget.index] = newPreset;
+        } else {
+          updated = [...presets, newPreset];
+        }
+
+        setPresets(updated);
+        try { localStorage.setItem("tk_tm_presets_v4", JSON.stringify(updated)); } catch(_) {}
+        setPresetModalOpen(false);
+      };
+
+      const deletePreset = () => {
+        if (presetEditTarget === null) return;
+        const updated = presets.filter((_, idx) => idx !== presetEditTarget.index);
+        setPresets(updated);
+        try { localStorage.setItem("tk_tm_presets_v4", JSON.stringify(updated)); } catch(_) {}
+        setPresetModalOpen(false);
+      };
+
+      const parsedPresetModal = parseInputDigits(presetModalInput);
+
+      return (
+        <div className="h-full flex flex-col p-[10px_12px] gap-1.5 overflow-hidden">
+          <div className="bg-card rounded-xl p-[9px_11px] border border-border shrink-0 no-drag">
+            <div className="flex justify-between items-center mb-[7px]">
+              <div className="flex gap-[5px] flex-wrap flex-1 max-w-[70%]">
+                {presets.map((p, idx) => {
+                  const isSelected = selectedPresetMs === p.ms && !customInput;
+                  return (
+                    <CustomPresetButton
+                      key={idx}
+                      preset={p}
+                      isSelected={isSelected}
+                      onTap={() => { setSelectedPresetMs(p.ms); setCustomInput(""); }}
+                      onLongPress={() => openEditPresetDialog(p, idx)}
+                    />
+                  );
+                })}
+                <button
+                  onClick={openNewPresetDialog}
+                  className="px-2.5 py-1 border border-dashed border-mutedCustom rounded-[7px] text-[10px] text-mutedCustom font-sans font-bold cursor-pointer hover:border-amberCustom hover:text-amberCustom transition-colors font-sans"
+                >
+                  ＋ 保存
+                </button>
+              </div>
+              <QuickOffsetButton value={stealSec} onChange={setStealSec} />
+            </div>
+
+            <div className="flex gap-1.5 animate-none">
+              <div className="relative flex-1">
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  value={customInput}
+                  onChange={(e) => { setCustomInput(e.target.value.replace(/\D/g, "").slice(0, 6)); setSelectedPresetMs(0); }}
+                  onKeyDown={(e) => e.key === "Enter" && createTimer()}
+                  placeholder="設定値を入力"
+                  className="bg-bg border border-border rounded-lg p-[8px_64px_8px_12px] text-blueCustom text-15 font-mono tracking-[1.5px] outline-none w-full box-border placeholder:text-mutedCustom/70 placeholder:text-sm placeholder:tracking-normal"
+                />
+                {parsedCustom && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 font-mono text-[10px] text-blueCustom opacity-50 pointer-events-none animate-none">
+                    {parsedCustom.str}
+                  </div>
+                )}
+              </div>
+              <input
+                type="text"
+                value={labelVal}
+                onChange={(e) => setLabelVal(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && createTimer()}
+                placeholder="ラベル"
+                className="w-[84px] bg-bg border border-border rounded-lg p-[6px_7px] text-mutedLight text-16 font-sans outline-none animate-none"
+              />
+              <button
+                onClick={createTimer}
+                className="px-[13px] py-1.5 rounded-lg text-xs font-sans font-bold cursor-pointer border-none font-sans"
+                style={{
+                  background: targetMs > 0 ? colors.blue : colors.gray,
+                  color: targetMs > 0 ? "#06060e" : colors.muted
+                }}
+              >
+                ＋
+              </button>
+            </div>
+          </div>
+
+          <div 
+            ref={scrollContainerRef} 
+            className={`flex-1 ${anyDragging ? 'overflow-hidden' : 'overflow-y-auto'}`}
+          >
+            {timers.length === 0 ? (
+              <div className="text-center py-[22px] text-mutedCustom font-sans text-xs border border-dashed border-border rounded-xl no-drag">
+                ⏳ タイマーを追加<br />
+                <span className="text-[10px] opacity-50">複数同時起動・▲▼で並び替え可・ダブルタップで小窓化</span>
+              </div>
+            ) : (
+              timers.map((t, idx) => (
+                <TimerItem
+                  key={t.id}
+                  timer={t}
+                  steal={stealSec}
+                  isFirst={idx === 0}
+                  isLast={idx === timers.length - 1}
+                  onUpdate={(updated) => setTimers(prev => prev.map(item => item.id === updated.id ? updated : item))}
+                  onDelete={(id) => setTimers(prev => prev.filter(t => t.id !== id))}
+                  onMoveUp={() => reorderTimers(idx, -1)}
+                  onMoveDown={() => reorderTimers(idx, 1)}
+                  onOpenOutput={onOpenOutput}
+                />
+              ))
+            )}
+          </div>
+
+          {/* プリセット登録・編集モーダル */}
+          {presetModalOpen && (
+            <div 
+              className="fixed inset-0 z-[300] bg-black/90 backdrop-blur-[6px] flex items-center justify-center p-5"
+              onClick={() => setPresetModalOpen(false)}
+            >
+              <div 
+                className="bg-card border border-border rounded-[20px] p-[22px] w-full max-w-[320px]"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ ...labelStyle, marginBottom: 14 }}>
+                  {presetEditTarget ? "プリセットを編集" : "プリセットを登録"}
+                </div>
+                
+                <label className="text-[10px] text-mutedLight tracking-[1px] mb-1 block">設定時間 (例: 0500 → 5分)</label>
+                <input
+                  autoFocus
+                  type="tel"
+                  inputMode="numeric"
+                  value={presetModalInput}
+                  onChange={(e) => setPresetModalInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="0300"
+                  className="bg-bg border border-amberCustom rounded-[10px] px-[14px] py-2 text-amberCustom text-[20px] font-mono tracking-[4px] outline-none w-full box-border mb-3 text-center animate-none"
+                />
+                
+                <label className="text-[10px] text-mutedLight tracking-[1px] mb-1 block">プリセット名称</label>
+                <input
+                  type="text"
+                  value={presetModalLabel}
+                  onChange={(e) => setPresetModalLabel(e.target.value)}
+                  placeholder={parsedPresetModal ? parsedPresetModal.str : "3分"}
+                  className="bg-bg border border-border rounded-[10px] px-[14px] py-2.5 text-whiteCustom text-[15px] outline-none w-full box-border mb-4 text-center animate-none"
+                />
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={savePreset}
+                    disabled={!parsedPresetModal}
+                    className="flex-1 py-3 bg-amberCustom rounded-[10px] text-bg text-xs tracking-[1px] font-sans font-bold cursor-pointer border-none disabled:opacity-40 font-sans"
+                  >
+                    ✓ 保存
+                  </button>
+                  {presetEditTarget && (
+                    <button
+                      onClick={deletePreset}
+                      className="py-3 px-3.5 bg-redCustom/20 border border-redCustom rounded-[10px] text-redCustom text-xs font-sans font-bold cursor-pointer font-sans"
+                    >
+                      🗑 削除
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setPresetModalOpen(false)}
+                    className="py-3 px-3.5 bg-surface border border-border rounded-[10px] text-mutedCustom text-xs font-sans cursor-pointer font-sans"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ストップウォッチ
+    function StopwatchManager({ swState, setSwState, clipboardVal, onOpenOutput }) {
+      const { running, laps, accumulated, startedAt } = swState;
+      const accumulatedRef = useRef(accumulated);
+      const startedAtRef = useRef(startedAt);
+      const clickTimer = useRef(0);
+      const [diffMode, setDiffMode] = useState(false);
+      const [customLaps2, setCustomLaps2] = useState([]);
+
+      useEffect(() => { accumulatedRef.current = accumulated; }, [accumulated]);
+      useEffect(() => { startedAtRef.current = startedAt; }, [startedAt]);
+
+      useAnimationFrameTrigger(running);
+
+      const elapsed = running ? accumulatedRef.current + (Date.now() - startedAtRef.current) : accumulatedRef.current;
+
+      useEffect(() => {
+        if (!clipboardVal) return;
+        const parsed = parseInputDigits(clipboardVal);
+        if (parsed) {
+          accumulatedRef.current = parsed.ms;
+          startedAtRef.current = null;
+          setSwState({ running: false, accumulated: parsed.ms, startedAt: null, laps: [] });
+          setCustomLaps2([]);
+        }
+      }, [clipboardVal]);
+
+      const toggleRun = () => {
+        if (running) {
+          const finalElapsed = accumulatedRef.current + (Date.now() - startedAtRef.current);
+          accumulatedRef.current = finalElapsed;
+          setSwState(prev => ({ ...prev, running: false, accumulated: finalElapsed, startedAt: null }));
+        } else {
+          const now = Date.now();
+          startedAtRef.current = now;
+          setSwState(prev => ({ ...prev, running: true, startedAt: now }));
+        }
+      };
+
+      const resetAll = () => {
+        accumulatedRef.current = 0;
+        setSwState({ running: false, accumulated: 0, startedAt: null, laps: [] });
+        setCustomLaps2([]);
+      };
+
+      const recordLap1 = () => {
+        if (elapsed === 0) return;
+        setSwState(prev => {
+          const lastTotal = prev.laps.length > 0 ? prev.laps[prev.laps.length - 1].total : 0;
+          const splitVal = elapsed - lastTotal;
+          return {
+            ...prev,
+            laps: [...prev.laps, {
+              id: Date.now(),
+              total: elapsed,
+              split: splitVal,
+              firstSplit: elapsed,
+              num: prev.laps.length + 1
+            }]
+          };
+        });
+      };
+
+      const recordLap2 = () => {
+        if (elapsed === 0) return;
+        setCustomLaps2(prev => {
+          const lastTotal = prev.length > 0 ? prev[prev.length - 1].total : 0;
+          return [...prev, {
+            id: Date.now(),
+            total: elapsed,
+            split: elapsed - lastTotal,
+            num: prev.length + 1
+          }];
+        });
+      };
+
+      const lastLapTotal = laps.length > 0 ? laps[laps.length - 1].total : 0;
+      const currentLapTime = elapsed - lastLapTotal;
+      const isLapShort = currentLapTime < 60000;
+      const isTotalShort = elapsed < 60000;
+
+      const formatLapNum = (num) => diffMode ? `${num}→${num + 1}` : `#${num}`;
+
+      return (
+        <div className="h-full flex flex-col p-[10px_12px] gap-1.5 overflow-hidden">
+          <div className="relative text-center bg-card border rounded-[14px] p-[10px_12px_12px] transition-all duration-300 shrink-0"
+               style={{ borderColor: running ? colors.green + "55" : colors.border, boxShadow: running ? `0 0 16px ${colors.greenGlow}` : "none" }}>
+            
+            <button
+              onClick={resetAll}
+              disabled={elapsed === 0}
+              className="absolute top-2 left-2.5 px-[9px] py-[3px] bg-transparent border rounded-[6px] text-[9px] tracking-[2px] font-mono font-bold transition-all duration-150 font-mono"
+              style={{
+                borderColor: elapsed > 0 ? colors.border : colors.border + "44",
+                color: elapsed > 0 ? colors.muted : colors.gray,
+                opacity: elapsed > 0 ? 1 : 0.3
+              }}
+            >
+              RST
+            </button>
+
+            <button
+              onClick={() => setDiffMode(prev => !prev)}
+              className="absolute top-2 right-2.5 px-[9px] py-[3px] bg-transparent border rounded-[6px] text-mutedCustom text-[9px] tracking-[1px] font-mono font-bold transition-all duration-150 flex items-center gap-1 font-mono"
+              style={{
+                borderColor: diffMode ? colors.amber : colors.border,
+                color: diffMode ? colors.amber : colors.muted
+              }}
+            >
+              <span className="w-[7px] h-[7px] rounded-full inline-block shrink-0 transition-all duration-150"
+                    style={{ background: colors.amber, boxShadow: diffMode ? `0 0 5px ${colors.amber}` : 'none' }} />
+              {diffMode ? "1→2" : "#1"}
+            </button>
+
+            <div 
+              className="pt-[22px] cursor-pointer"
+              onPointerUp={() => {
+                const now = Date.now();
+                if (now - clickTimer.current < 350) {
+                  clickTimer.current = 0;
+                  if (onOpenOutput) onOpenOutput();
+                } else {
+                  clickTimer.current = now;
+                }
+              }}
+            >
+              <div className="font-mono text-[44px] tracking-[2px] leading-none transition-colors duration-300"
+                   style={{ color: running ? colors.green : currentLapTime > 0 ? colors.amber : colors.white }}>
+                {isLapShort ? formatTimeMs(currentLapTime) : formatTime(currentLapTime)}
+              </div>
+              <div className="font-mono text-[11px] text-mutedCustom mt-1.2 tracking-[1px]">
+                TOTAL{laps.length > 0 ? `  Lap ${laps.length + 1}` : ""}  /  {isTotalShort ? formatTimeMs(elapsed) : formatTime(elapsed)}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-2 shrink-0">
+            <button
+              onClick={recordLap1}
+              disabled={!running && elapsed === 0}
+              className="flex-1 py-2.5 bg-card border border-border rounded-[10px] text-whiteCustom text-[11px] tracking-[1px] font-mono font-bold cursor-pointer leading-[1.3] disabled:opacity-40 font-mono"
+            >
+              <div>LAP1</div>
+              <div className="text-[9px] text-mutedCustom mt-[2px] font-sans">{diffMode ? "差分" : "分割"}</div>
+            </button>
+
+            <button
+              onClick={toggleRun}
+              className="flex-[2] py-2.5 rounded-[10px] text-[#06060e] text-[13px] tracking-[3px] font-sans font-bold cursor-pointer border-none font-sans"
+              style={{
+                background: running ? colors.red : colors.green,
+                boxShadow: running ? `0 0 12px ${colors.redGlow}` : `0 0 12px ${colors.greenGlow}`
+              }}
+            >
+              {running ? "⏸ 停止" : elapsed > 0 ? "▶ 再開" : "▶ スタート"}
+            </button>
+
+            <button
+              onClick={recordLap2}
+              disabled={!running && elapsed === 0}
+              className="flex-1 py-2.5 bg-card border border-border rounded-[10px] text-blueCustom text-[11px] tracking-[1px] font-mono font-bold cursor-pointer leading-[1.3] disabled:opacity-40 font-mono"
+            >
+              <div>LAP2</div>
+              <div className="text-[9px] text-mutedCustom mt-[2px] font-sans">累積</div>
+            </button>
+          </div>
+
+          <div className="flex-1 min-h-0 flex gap-1.5 overflow-hidden">
+            {/* LAP1 リスト */}
+            <div className="flex-1 min-h-0 bg-card border border-border rounded-xl overflow-hidden flex flex-col">
+              <div className="p-[5px_10px_4px] border-b border-border/20 shrink-0">
+                <div style={{ ...labelStyle, fontSize: 8 }}>
+                  LAP1 <span className="opacity-50 tracking-[1px] font-normal">{diffMode ? "差分" : "分割"}</span>
+                </div>
+              </div>
+              {laps.length === 0 ? (
+                <div className="flex-1 flex items-center justify-center text-grayCustom font-mono text-[10px] opacity-40 text-center px-2">
+                  記録なし
+                </div>
+              ) : (
+                <div className="flex-1 min-h-0 overflow-y-auto">
+                  {[...laps].reverse().map((lap, idx) => {
+                    const validLaps = laps.filter(l => l.num > 1);
+                    const isMin = validLaps.length > 1 && lap.num > 1 && lap.split === Math.min(...validLaps.map(l => l.split));
+                    const isMax = validLaps.length > 1 && lap.num > 1 && lap.split === Math.max(...validLaps.map(l => l.split));
+                    const isFirstLap = lap.num === 1;
+                    return (
+                      <div key={lap.id} className="p-[8px_10px] border-b border-border/10"
+                           style={{ background: idx === 0 ? colors.cardHover : 'transparent' }}>
+                        <div className="flex justify-between items-baseline mb-[2px]">
+                          <span className="font-sans text-[9px] text-mutedCustom tracking-[0.5px]"
+                                style={{ color: diffMode ? colors.white : colors.muted }}>
+                            {formatLapNum(lap.num)}
+                          </span>
+                          {!isFirstLap && lap.firstSplit !== lap.split && (
+                            <span className="font-mono text-[11px] text-amberCustom tracking-[0.5px] opacity-85">
+                              +{formatTimeMs(lap.firstSplit)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <div className="flex-1 min-w-0 font-mono text-[30px] tracking-[0.5px] leading-[1.05]"
+                               style={{ color: isFirstLap ? colors.green : colors.white }}>
+                            {formatTimeMs(isFirstLap ? lap.total : lap.split)}
+                          </div>
+                          {isMin && <div className="text-[13px] text-greenCustom shrink-0">▲</div>}
+                          {isMax && <div className="text-[13px] text-redCustom shrink-0">▼</div>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* LAP2 リスト */}
+            <div className="flex-1 min-h-0 bg-card border border-blueCustom/30 rounded-xl overflow-hidden flex flex-col">
+              <div className="p-[5px_10px_4px] border-b border-border/20 shrink-0">
+                <div style={{ ...labelStyle, fontSize: 8, color: colors.blue }}>
+                  LAP2 <span className="opacity-50 tracking-[1px] font-normal text-mutedCustom">ラップ差</span>
+                </div>
+              </div>
+              {customLaps2.length === 0 ? (
+                <div className="flex-1 flex items-center justify-center text-grayCustom font-mono text-[10px] opacity-40 text-center px-2">
+                  記録なし
+                </div>
+              ) : (
+                <div className="flex-1 min-h-0 overflow-y-auto">
+                  {[...customLaps2].reverse().map((lap, idx) => {
+                    const isMin = customLaps2.length > 1 && lap.split === Math.min(...customLaps2.map(l => l.split));
+                    const isMax = customLaps2.length > 1 && lap.split === Math.max(...customLaps2.map(l => l.split));
+                    return (
+                      <div key={lap.id} className="p-[8px_10px] border-b border-border/10"
+                           style={{ background: idx === 0 ? colors.cardHover : 'transparent' }}>
+                        <div className="font-sans text-[9px] text-blueCustom mb-[2px]">#{lap.num}</div>
+                        <div className="flex items-center gap-1.5">
+                          <div className="flex-1 min-w-0 font-mono text-[30px] text-blueCustom tracking-[0.5px] opacity-90 leading-[1.05]">
+                            {formatTimeMs(lap.split)}
+                          </div>
+                          {isMin && <div className="text-[13px] text-greenCustom font-mono">▲</div>}
+                          {isMax && <div className="text-[13px] text-redCustom font-mono">▼</div>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // 電卓コンポーネント ( Wd コンポーネント )
+    function CalculatorManager({ setClipboardVal }) {
+      const [expression, setExpression] = useState("");
+      const [copySuccess, setCopySuccess] = useState(false);
+
+      const computedMs = parseCalculatorFormula(expression);
+      const outputTimeStr = formatFullHMS(computedMs);
+      const isNegative = computedMs < 0;
+
+      const handleKey = (key) => {
+        setExpression(prev => {
+          if (key === "⌫" || key === "Backspace") {
+            return prev.slice(0, -1);
+          }
+          if (key === "C" || key === "Escape" || key === "Delete") {
+            return "";
+          }
+          if (key === "+" || key === "-") {
+            if (!prev) return "";
+            if (endsWithOperator(prev)) {
+              return prev.slice(0, -1) + key;
+            }
+            return prev + key;
+          }
+          if (key === "s" || key === "m") {
+            if (!prev) return prev;
+            if (endsWithOperator(prev)) return prev;
+            const lastChar = prev[prev.length - 1];
+            if (lastChar === "s" || lastChar === "m") return prev;
+            return prev + key;
+          }
+          if (["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"].includes(key)) {
+            const lastSegment = prev.split(/[+-]/).pop() || "";
+            if (lastSegment.endsWith("s") || lastSegment.endsWith("m")) return prev;
+            if (lastSegment.replace(/\D/g, "").length >= 6) return prev;
+            return prev + key;
+          }
+          return prev;
+        });
+      };
+
+      useEffect(() => {
+        const handlePhysicalKey = (e) => {
+          if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+          const k = e.key;
+          if (k === "Backspace" || k === "Delete" || k === "Escape" || k === "+" || k === "-" || k === "s" || k === "m" || /^[0-9]$/.test(k)) {
+            e.preventDefault();
+            handleKey(k);
+          }
+        };
+        window.addEventListener("keydown", handlePhysicalKey);
+        return () => window.removeEventListener("keydown", handlePhysicalKey);
+      }, []);
+
+      const copyToClipboard = () => {
+        const sixDigits = formatTo6Digits(computedMs);
+        
+        // iframe制約に対応するため document.execCommand('copy') を使用
+        const tempInput = document.createElement("input");
+        tempInput.value = sixDigits;
+        document.body.appendChild(tempInput);
+        tempInput.select();
+        try {
+          document.execCommand('copy');
+          setCopySuccess(true);
+          setTimeout(() => setCopySuccess(false), 2000);
+        } catch (_) {
+          console.error("Copy failed");
+        }
+        document.body.removeChild(tempInput);
+        
+        setClipboardVal(sixDigits);
+      };
+
+      const keysLayout = [
+        ["7", "8", "9"],
+        ["4", "5", "6"],
+        ["1", "2", "3"],
+        ["s", "0", "m"]
+      ];
+
+      const renderKeyButton = (k) => {
+        const isS = k === "s";
+        const isM = k === "m";
+        return (
+          <button
+            key={k}
+            onPointerDown={(e) => {
+              e.preventDefault();
+              handleKey(k);
+              e.currentTarget.style.background = colors.amberGlow;
+              e.currentTarget.style.transform = "scale(0.93)";
+            }}
+            onPointerUp={(e) => {
+              e.currentTarget.style.background = (isS || isM) ? "rgba(96,168,255,0.08)" : colors.card;
+              e.currentTarget.style.transform = "scale(1)";
+            }}
+            onPointerLeave={(e) => {
+              e.currentTarget.style.background = (isS || isM) ? "rgba(96,168,255,0.08)" : colors.card;
+              e.currentTarget.style.transform = "scale(1)";
+            }}
+            className="flex-1 font-mono text-[18px] leading-none cursor-pointer transition-transform duration-75 border rounded-[10px] select-none text-center h-full flex items-center justify-center font-bold font-sans"
+            style={{
+              background: (isS || isM) ? "rgba(96,168,255,0.08)" : colors.card,
+              borderColor: (isS || isM) ? colors.blueCustom + "44" : colors.border,
+              color: (isS || isM) ? colors.blueCustom : colors.white,
+              WebkitTapHighlightColor: "transparent"
+            }}
+          >
+            {k}
+          </button>
+        );
+      };
+
+      let lastOp = "+";
+      for (let i = expression.length - 1; i >= 0; i--) {
+        if (expression[i] === "+" || expression[i] === "-") {
+          lastOp = expression[i];
+          break;
+        }
+      }
+
+      const renderSpecialButton = (k, bg, fontColor) => (
+        <button
+          key={k}
+          onPointerDown={(e) => {
+            e.preventDefault();
+            handleKey(k);
+            e.currentTarget.style.transform = "scale(0.93)";
+          }}
+          onPointerUp={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
+          onPointerLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
+          className="flex-1 font-mono text-[18px] font-bold leading-none cursor-pointer transition-transform duration-75 border rounded-[10px] select-none h-full flex items-center justify-center font-sans"
+          style={{
+            background: bg,
+            borderColor: colors.border,
+            color: fontColor,
+            WebkitTapHighlightColor: "transparent"
+          }}
+        >
+          {k}
+        </button>
+      );
+
+      return (
+        <div className="h-full flex flex-col p-[10px_12px] gap-1.5">
+          <div className="bg-card border border-border rounded-[10px] p-[8px_12px] shrink-0 min-h-[40px]">
+            <div style={{ ...labelStyle, fontSize: 7, marginBottom: 2 }}>式 <span className="opacity-40 font-normal">s=秒 / m=分 直接指定</span></div>
+            <div className="font-mono text-[14px] text-amberCustom tracking-[1px] leading-[1.3] min-h-[18px] word-break-all">
+              {formatCalculatorFormula(expression) || <span className="text-mutedCustom opacity-40">数字を入力…</span>}
+              {expression && !endsWithOperator(expression) && <span className="opacity-50">|</span>}
+            </div>
+          </div>
+
+          {/* 計算結果枠 - 負数の場合は赤枠＆赤文字警告 */}
+          <div 
+            className="bg-card border rounded-[10px] p-[8px_12px] flex items-center justify-between shrink-0 transition-all duration-300"
+            style={{
+              borderColor: isNegative ? colors.red : colors.greenCustom + "50",
+              boxShadow: isNegative ? `0 0 12px ${colors.redGlow}` : "none"
+            }}
+          >
+            <div>
+              <div style={{ ...labelStyle, fontSize: 7, marginBottom: 2, color: isNegative ? colors.red : colors.muted }}>
+                = 結果 {isNegative && "(負数)"}
+              </div>
+              <div 
+                className="font-mono text-[28px] tracking-[3px] leading-none transition-colors"
+                style={{ color: isNegative ? colors.red : colors.green }}
+              >
+                {outputTimeStr}
+              </div>
+            </div>
+            <button
+              onClick={copyToClipboard}
+              className="px-3 py-2 border rounded-lg text-[10px] tracking-[1px] font-sans font-bold cursor-pointer transition-all duration-200 font-sans"
+              style={{
+                background: copySuccess ? colors.card : isNegative ? colors.redGlow : colors.greenGlow,
+                borderColor: colors.green,
+                color: colors.green
+              }}
+            >
+              {copySuccess ? "✓ コピー済" : "📋 コピー"}
+            </button>
+          </div>
+
+          <div className="flex flex-col gap-1.2 flex-1">
+            {keysLayout.map((row, rIdx) => (
+              <div key={rIdx} className="flex gap-1.2 flex-1">
+                {row.map(k => renderKeyButton(k))}
+              </div>
+            ))}
+            <div className="flex gap-1.2 flex-1">
+              {renderSpecialButton("C", colors.surface, colors.muted)}
+              {renderSpecialButton("⌫", colors.surface, colors.amber)}
+              {renderSpecialButton("-", lastOp === "-" ? colors.blueGlow : colors.surface, colors.blue)}
+              {renderSpecialButton("+", lastOp === "+" ? colors.blueGlow : colors.surface, colors.blue)}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // 出力画面/フローティングミニウィンドウ
+    function FloatingOutput({ sourceKey, cdTargets, timers, swState, cdSteal, tmSteal, onClose }) {
+      const [position, setPosition] = useState({ x: 16, y: 80 });
+      const [size, setSize] = useState({ w: 240, h: 140 }); // 初期サイズ
+      
+      const [showCloseBtn, setShowCloseBtn] = useState(false);
+      const [labelWeight, setLabelWeight] = useState(0.35);
+
+      const isDragActive = useRef(false);
+      const dragStartOffset = useRef({ x: 0, y: 0 });
+      const isResizeActive = useRef(false);
+      const resizeStartMetrics = useRef({ x: 0, y: 0, w: 0, h: 0 });
+      const isResizingDivider = useRef(false);
+      const lastTapTime = useRef(0);
+      const boxRef = useRef(null);
+
+      useAnimationFrameTrigger(true);
+
+      const itemInfo = (() => {
+        const { type, id } = sourceKey;
+
+        if (type === "cd") {
+          const item = cdTargets.find(t => t.id === id);
+          if (!item) return { display: "–:–", color: colors.muted, label: "–" };
+          const remaining = item.target - Date.now() - (cdSteal > 0 ? cdSteal * 1000 : 0);
+          const isPast = remaining <= 0;
+          const displayMs = isPast ? Math.abs(remaining) : roundUpToSecond(remaining);
+          return {
+            display: (isPast ? "+" : "") + formatTime(displayMs),
+            color: isPast ? colors.red : colors.amber,
+            label: item.label || new Date(item.target).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+          };
+        }
+
+        if (type === "tm") {
+          const timer = timers.find(t => t.id === id);
+          if (!timer) return { display: "–:–", color: colors.muted, label: "–" };
+          const baseRemaining = timer.running ? Math.max(0, timer.endAt - Date.now()) : timer.remaining;
+          const offsetRemaining = tmSteal > 0 ? Math.max(0, baseRemaining - tmSteal * 1000) : baseRemaining;
+          const displayMs = timer.done ? 0 : roundUpToSecond(offsetRemaining);
+          
+          const formattedTotal = formatTime(timer.totalMs);
+          const displayLabel = timer.label 
+            ? `${timer.label} → ${formattedTotal}` 
+            : formattedTotal;
+
+          return {
+            display: timer.done ? "完了" : formatTime(displayMs),
+            color: timer.done ? colors.green : timer.running ? colors.blue : colors.mutedLight,
+            label: displayLabel
+          };
+        }
+
+        const stopwatchTotal = swState.accumulated;
+        const stopwatchStart = swState.startedAt;
+        const currentMs = swState.running ? stopwatchTotal + (Date.now() - stopwatchStart) : stopwatchTotal;
+        return {
+          display: currentMs < 60000 ? formatTimeMs(currentMs) : formatTime(currentMs),
+          color: swState.running ? colors.green : colors.amber,
+          label: "ストップウォッチ"
+        };
+      })();
+
+      const handleDragStart = (e) => {
+        if (e.target.closest('.no-drag') || isResizingDivider.current) return;
+        e.preventDefault();
+        isDragActive.current = true;
+        dragStartOffset.current = {
+          x: e.clientX - position.x,
+          y: e.clientY - position.y
+        };
+        boxRef.current?.setPointerCapture(e.pointerId);
+      };
+
+      const handleDragMove = (e) => {
+        if (!isDragActive.current) return;
+        const nextX = e.clientX - dragStartOffset.current.x;
+        const nextY = e.clientY - dragStartOffset.current.y;
+        setPosition({
+          x: Math.max(0, nextX),
+          y: Math.max(0, nextY)
+        });
+      };
+
+      const handleDragEnd = (e) => {
+        if (isDragActive.current) {
+          isDragActive.current = false;
+          try { boxRef.current?.releasePointerCapture(e.pointerId); } catch(_) {}
+        }
+      };
+
+      const handleTapOrDoubleTap = (e) => {
+        if (e.target.closest('.no-drag')) return;
+        const now = Date.now();
+        if (now - lastTapTime.current < 300) {
+          setShowCloseBtn(prev => !prev);
+          lastTapTime.current = 0;
+        } else {
+          lastTapTime.current = now;
+        }
+      };
+
+      const minW = 160;
+      const minH = 80;
+      const maxW = 600;
+      const maxH = 500;
+
+      const handleResizeStart = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        isResizeActive.current = true;
+        resizeStartMetrics.current = {
+          x: e.clientX,
+          y: e.clientY,
+          w: size.w,
+          h: size.h
+        };
+        try { e.currentTarget.setPointerCapture(e.pointerId); } catch(_) {}
+      };
+
+      const handleResizeMove = (e) => {
+        if (!isResizeActive.current) return;
+        const dx = e.clientX - resizeStartMetrics.current.x;
+        const dy = e.clientY - resizeStartMetrics.current.y;
+        setSize({
+          w: Math.max(minW, Math.min(maxW, resizeStartMetrics.current.w + dx)),
+          h: Math.max(minH, Math.min(maxH, resizeStartMetrics.current.h + dy))
+        });
+      };
+
+      const handleResizeEnd = (e) => {
+        if (isResizeActive.current) {
+          isResizeActive.current = false;
+          try { e.currentTarget.releasePointerCapture(e.pointerId); } catch(_) {}
+        }
+      };
+
+      const handleDividerPointerDown = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        isResizingDivider.current = true;
+        try { e.currentTarget.setPointerCapture(e.pointerId); } catch(_) {}
+      };
+
+      const handleDividerPointerMove = (e) => {
+        if (!isResizingDivider.current) return;
+        const container = boxRef.current;
+        if (!container) return;
+
+        const rect = container.getBoundingClientRect();
+        const dividerHeight = 6;
+        const availableHeight = rect.height - dividerHeight;
+
+        if (availableHeight <= 0) return;
+
+        const relativeY = e.clientY - rect.top;
+        const newWeight = relativeY / availableHeight;
+        
+        setLabelWeight(Math.max(0.15, Math.min(0.85, newWeight)));
+      };
+
+      const handleDividerPointerUp = (e) => {
+        if (isResizingDivider.current) {
+          isResizingDivider.current = false;
+          try { e.currentTarget.releasePointerCapture(e.pointerId); } catch(_) {}
+        }
+      };
+
+      const dividerH = 6;
+      const contentH = size.h - dividerH;
+      const labelHeight = contentH * labelWeight;
+      const timeHeight = contentH * (1 - labelWeight);
+
+      const labelFontSize = Math.max(12, Math.min(labelHeight * 0.45, size.w * 0.14));
+      const timeFontSize = Math.max(16, Math.min(timeHeight * 0.72, size.w * 0.23));
+
+      return (
+        <div
+          ref={boxRef}
+          onPointerDown={handleDragStart}
+          onPointerMove={handleDragMove}
+          onPointerUp={(e) => { handleDragEnd(e); handleTapOrDoubleTap(e); }}
+          onPointerCancel={handleDragEnd}
+          className="fixed z-[400] bg-card rounded-[18px] select-none cursor-grab touch-none transition-[box-shadow,border-color] duration-300 flex flex-col overflow-hidden"
+          style={{
+            left: position.x,
+            top: position.y,
+            border: `1px solid ${itemInfo.color}88`,
+            boxShadow: `0 8px 32px rgba(0,0,0,0.7), 0 0 20px ${itemInfo.color}22`,
+            width: size.w,
+            height: size.h,
+          }}
+        >
+          {showCloseBtn && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onClose(); }}
+              className="absolute top-2.5 right-2.5 w-6 h-6 bg-black/80 hover:bg-redCustom border border-redCustom/60 rounded-full text-redCustom hover:text-white text-xs font-bold cursor-pointer flex items-center justify-center transition-all z-[100] no-drag active:scale-90 font-sans"
+              style={{ boxShadow: `0 0 10px ${colors.redGlow}` }}
+            >
+              ✕
+            </button>
+          )}
+
+          {/* 上段：ラベル表示エリア */}
+          <div 
+            className="w-full flex items-center justify-center px-4 overflow-hidden text-center transition-all"
+            style={{ height: labelHeight }}
+          >
+            <div 
+              className="font-sans font-bold leading-tight break-all transition-all line-clamp-2"
+              style={{ 
+                fontSize: labelFontSize, 
+                color: colors.whiteCustom,
+                textShadow: `0 0 8px rgba(220,224,248,0.2)`
+              }}
+            >
+              {itemInfo.label}
+            </div>
+          </div>
+
+          {/* ドラッグ境界線スライダー */}
+          <div
+            onPointerDown={handleDividerPointerDown}
+            onPointerMove={handleDividerPointerMove}
+            onPointerUp={handleDividerPointerUp}
+            onPointerCancel={handleDividerPointerUp}
+            className="w-full h-[6px] cursor-ns-resize touch-none flex items-center justify-center transition-colors hover:bg-amberCustom/10 no-drag"
+            style={{ background: "rgba(34,34,58,0.4)" }}
+          >
+            <div 
+              className="w-10 h-[3px] rounded-full transition-colors duration-150"
+              style={{ 
+                background: isResizingDivider.current ? itemInfo.color : colors.border
+              }}
+            />
+          </div>
+
+          {/* 下段：タイム表示エリア */}
+          <div 
+            className="w-full flex items-center justify-center px-4 overflow-hidden transition-all"
+            style={{ height: timeHeight }}
+          >
+            <div 
+              className="font-mono font-bold tracking-[1px] leading-none text-center transition-colors duration-300"
+              style={{ 
+                fontSize: timeFontSize, 
+                color: itemInfo.color,
+                textShadow: `0 0 16px ${itemInfo.color}44`
+              }}
+            >
+              {itemInfo.display}
+            </div>
+          </div>
+
+          {/* 右下のリサイズハンドル */}
+          <div
+            onPointerDown={handleResizeStart}
+            onPointerMove={handleResizeMove}
+            onPointerUp={handleResizeEnd}
+            onPointerCancel={handleResizeEnd}
+            className="absolute right-0.5 bottom-0.5 w-[20px] h-[20px] cursor-nwse-resize touch-none flex items-end justify-end p-[2px] text-mutedCustom opacity-45 z-[50] no-drag"
+          >
+            <svg width="10" height="10" viewBox="0 0 11 11">
+              <path d="M10 1 L1 10 M10 5 L5 10 M10 9 L9 10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+      );
+    }
+
+    // アプリケーション全体エントリーポイント
+    function App() {
+      const [currentTab, setCurrentTab] = useState("cd");
+      const [timeOffset, setTimeOffset] = useState(0);
+      const [clipboardValue, setClipboardValue] = useState("");
+      
+      const [countdownTargets, setCountdownTargets] = useState([]);
+      const [timers, setTimers] = useState([]);
+      const [stopwatchState, setStopwatchState] = useState({
+        running: false,
+        accumulated: 0,
+        startedAt: null,
+        laps: []
+      });
+
+      const [cdSteal, setCdSteal] = useState(0);
+      const [tmSteal, setTmSteal] = useState(0);
+      const [activeOutputKey, setActiveOutputKey] = useState(null);
+
+      const tabItems = [
+        { id: "cd", label: "CD", icon: "⏰" },
+        { id: "tm", label: "TM", icon: "⏳" },
+        { id: "sw", label: "SW", icon: "⏱" },
+        { id: "calc", label: "CALC", icon: "🧮" }
+      ];
+
+      return (
+        <div className="h-[100vh] bg-bg text-white font-sans max-w-[430px] mx-auto flex flex-col overflow-hidden select-none">
+          {/* ヘッダーナビゲーション */}
+          <div className="flex justify-between items-center p-2 border-b border-border bg-bg shrink-0 z-50">
+            <div className="flex gap-1">
+              {tabItems.map(tab => {
+                const isActive = currentTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setCurrentTab(tab.id)}
+                    className="flex items-center gap-[2px] p-[4px_6px] bg-transparent border rounded-[6px] text-[9px] tracking-[1px] font-sans transition-all duration-150 font-sans"
+                    style={{
+                      background: isActive ? colors.amberGlow : 'none',
+                      borderColor: isActive ? colors.amber : colors.border,
+                      color: isActive ? colors.amber : colors.muted,
+                      fontWeight: isActive ? 700 : 400
+                    }}
+                  >
+                    <span className="text-[12px]">{tab.icon}</span>
+                    <span>{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            
+            <HeaderClock offsetMs={timeOffset} setOffsetMs={setTimeOffset} />
+          </div>
+
+          {/* タブコンテンツ */}
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col" style={{ display: currentTab === "cd" ? "flex" : "none" }}>
+            <CountdownManager
+              targets={countdownTargets}
+              setTargets={setCountdownTargets}
+              clipboardVal={clipboardValue}
+              stealSec={cdSteal}
+              setStealSec={setCdSteal}
+              onOpenOutput={(id) => setActiveOutputKey({ type: "cd", id })}
+            />
+          </div>
+
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col" style={{ display: currentTab === "tm" ? "flex" : "none" }}>
+            <TimerManager
+              timers={timers}
+              setTimers={setTimers}
+              clipboardVal={clipboardValue}
+              stealSec={tmSteal}
+              setStealSec={setTmSteal} // CDと同じsteal設定に同期するバグを「setTmSteal」へ修復完了！
+              onOpenOutput={(id) => setActiveOutputKey({ type: "tm", id })}
+            />
+          </div>
+
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col" style={{ display: currentTab === "sw" ? "flex" : "none" }}>
+            <StopwatchManager
+              swState={stopwatchState}
+              setSwState={setStopwatchState}
+              clipboardVal={clipboardValue}
+              onOpenOutput={() => setActiveOutputKey({ type: "sw", id: "sw" })}
+            />
+          </div>
+
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col" style={{ display: currentTab === "calc" ? "flex" : "none" }}>
+            <CalculatorManager setClipboardVal={setClipboardValue} />
+          </div>
+
+          {/* フローティング小窓 */}
+          {activeOutputKey && (
+            <FloatingOutput
+              sourceKey={activeOutputKey}
+              cdTargets={countdownTargets}
+              timers={timers}
+              swState={stopwatchState}
+              cdSteal={cdSteal}
+              tmSteal={tmSteal}
+              onClose={() => setActiveOutputKey(null)}
+            />
+          )}
+        </div>
+      );
+    }
+
+    const container = document.getElementById('root');
+    const root = ReactDOM.createRoot(container);
+    root.render(<App />);
+  </script>
+</body>
+</html>
+
+```
