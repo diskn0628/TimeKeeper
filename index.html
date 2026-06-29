@@ -268,25 +268,46 @@
       return `${sign}${pad(h)}${pad(m)}${pad(s)}`;
     }
 
-    // アニメーションループ再描画カスタムフック
-    function useAnimationFrameTrigger(active) {
+    // 超低負荷マルチ駆動・自動バックグラウンド一時停止カスタムフック
+    function useLowPowerTrigger(mode = "low") {
       const [, setTick] = useState(0);
-      const requestRef = useRef(null);
+      const timerRef = useRef(null);
+      const [isPageVisible, setIsPageVisible] = useState(!document.hidden);
 
       useEffect(() => {
-        if (!active) return;
-        let isCancelled = false;
-        const update = () => {
-          if (isCancelled) return;
-          setTick(prev => prev + 1);
-          requestRef.current = requestAnimationFrame(update);
-        };
-        requestRef.current = requestAnimationFrame(update);
-        return () => {
-          isCancelled = true;
-          if (requestRef.current) cancelAnimationFrame(requestRef.current);
-        };
-      }, [active]);
+        const onVisibilityChange = () => setIsPageVisible(!document.hidden);
+        document.addEventListener("visibilitychange", onVisibilityChange);
+        return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+      }, []);
+
+      useEffect(() => {
+        // バックグラウンド非表示、または稼働モードが "none" の場合はループを完全遮断（CPU消費ゼロ）
+        if (!isPageVisible || mode === "none") {
+          return;
+        }
+
+        if (mode === "high") {
+          // ストップウォッチなどのミリ秒描写用高速 60FPS ループ
+          let active = true;
+          const loop = () => {
+            if (!active) return;
+            setTick(t => t + 1);
+            timerRef.current = requestAnimationFrame(loop);
+          };
+          timerRef.current = requestAnimationFrame(loop);
+          return () => {
+            active = false;
+            if (timerRef.current) cancelAnimationFrame(timerRef.current);
+          };
+        } else {
+          // カウントダウンや通常のタイマー更新用省電力 200ms ループ（秒間5回）
+          const interval = setInterval(() => {
+            setTick(t => t + 1);
+          }, 200);
+          timerRef.current = interval;
+          return () => clearInterval(interval);
+        }
+      }, [mode, isPageVisible]);
     }
 
     // 何秒早めるか設定コンポーネント
@@ -404,8 +425,28 @@
       const timerRef = useRef(null);
 
       useEffect(() => {
-        const interval = setInterval(() => setTick(prev => prev + 1), 200);
-        return () => clearInterval(interval);
+        let interval;
+        const updateClock = () => {
+          if (!document.hidden) {
+            setTick(prev => prev + 1);
+          }
+        };
+        interval = setInterval(updateClock, 200);
+
+        const onVisibilityChange = () => {
+          if (document.hidden) {
+            clearInterval(interval);
+          } else {
+            clearInterval(interval);
+            interval = setInterval(updateClock, 200);
+          }
+        };
+
+        document.addEventListener("visibilitychange", onVisibilityChange);
+        return () => {
+          clearInterval(interval);
+          document.removeEventListener("visibilitychange", onVisibilityChange);
+        };
       }, []);
 
       const targetTime = new Date(Date.now() + offsetMs);
@@ -699,7 +740,8 @@
       const inputRef = useRef(null);
       const scrollContainerRef = useRef(null);
 
-      useAnimationFrameTrigger(true);
+      // 節電200ms間引きループ
+      useLowPowerTrigger("low");
 
       // SortableJSの初期化
       useEffect(() => {
@@ -967,9 +1009,10 @@
       );
     }
 
-    // タイマーアイテムコンポーネント (Pointer Event による SortableJS インターセプト保護を完全に撤去し onClick へ安全配置)
+    // タイマーアイテムコンポーネント (省電力200msループ駆動 ＆ GPU線形アニメーション補完)
     function TimerItem({ timer, onUpdate, onDelete, onMoveUp, onMoveDown, isFirst, isLast, steal, onOpenOutput, onEditLabel }) {
-      useAnimationFrameTrigger(timer.running);
+      // 200ms間隔の省電力更新。タイマーが止まっている時はループ遮断
+      useLowPowerTrigger(timer.running ? "low" : "none");
 
       const [translateX, setTranslateX] = useState(0);
       const [isSwiping, setIsSwiping] = useState(false);
@@ -1094,7 +1137,7 @@
                 </button>
               </div>
 
-              {/* 中央巨大数字＆ラベル（設定値統合表示） */}
+              {/* 中央巨大数字＆ラベル */}
               <div className="flex-1 min-w-0 px-1">
                 <div className="font-sans text-[22px] font-bold text-whiteCustom leading-tight overflow-hidden text-ellipsis whitespace-nowrap">
                   {displayLabel}
@@ -1107,7 +1150,7 @@
                 </div>
               </div>
 
-              {/* 右側ボタン：標準の onClick で完動させ、stopPropagation で SortableJS の誤作動のみ確実に防御！ */}
+              {/* 右側ボタン */}
               <div className="flex flex-col gap-[6px] shrink-0 w-[84px] no-drag">
                 <button
                   onClick={(e) => {
@@ -1155,13 +1198,14 @@
             </div>
 
             {/* タイマー進捗バー */}
-            <div className="h-1 -mx-3 bg-border/20">
+            <div className="h-1 -mx-3 bg-border/20 overflow-hidden">
               <div 
-                className="h-full transition-all"
+                className="h-full"
                 style={{
                   width: `${Math.max(0, Math.min(1, isOver ? 0 : progress)) * 100}%`,
                   background: currentColor,
-                  transitionDuration: timer.running && !isOver ? "0s" : "0.15s"
+                  transition: timer.running && !isOver ? "width 0.2s linear" : "width 0.15s ease-out",
+                  willChange: "width"
                 }}
               />
             </div>
@@ -1170,7 +1214,7 @@
       );
     }
 
-    // 各プリセットボタン（長押し機能つき、選択状態の青ネオン枠光り仕様）
+    // 各プリセットボタン（選択状態の青ネオン枠光り仕様）
     function CustomPresetButton({ preset, isSelected, onTap, onLongPress }) {
       const timerRef = useRef(null);
       const isLongPress = useRef(false);
@@ -1213,7 +1257,6 @@
     }
 
     // タイマータブマネージャー
-    let timerUniqueId = 0;
     function TimerManager({ timers, setTimers, clipboardVal, stealSec, setStealSec, onOpenOutput }) {
       const [customInput, setCustomInput] = useState("");
       const [labelVal, setLabelVal] = useState("");
@@ -1251,7 +1294,7 @@
       const [presetModalLabel, setPresetModalLabel] = useState("");
       const [presetModalInput, setPresetModalInput] = useState("");
 
-      // SortableJSの初期化＆ReactのStateの完璧な双方向バインド (空の依存配列[]に固定して無限ループブラックアウトを完全防御！)
+      // SortableJSの初期化＆ReactのStateの完璧な双方向バインド
       useEffect(() => {
         if (!scrollContainerRef.current) return;
 
@@ -1263,7 +1306,7 @@
           ghostClass: 'sortable-ghost',
           chosenClass: 'sortable-chosen',
           filter: '.no-drag',
-          preventOnFilter: false, // 標準のonClick判定を決してキャンセルしない
+          preventOnFilter: false, 
           
           onStart: function () {
             setAnyDragging(true);
@@ -1274,19 +1317,13 @@
           onEnd: function (evt) {
             setAnyDragging(false);
             
-            // SortableJSが物理的に移動させたDOMノードを一度元の位置に戻す
             if (evt.oldIndex !== evt.newIndex) {
               const parent = evt.from;
               const item = evt.item;
               const referenceNode = parent.children[evt.oldIndex > evt.newIndex ? evt.oldIndex + 1 : evt.oldIndex];
-              
-              // 1. まず SortableJS が並び替えた現在のDOM配列に基づいて「新しいID順序（数値型）」を取得する
               const newOrder = Array.from(parent.children).map(el => Number(el.getAttribute('data-id')));
-              
-              // 2. 次に SortableJS の物理移動をリセットし、親要素に元のDOM順序を復元する
               parent.insertBefore(item, referenceNode);
 
-              // 3. ReactのStateを新しい順序に更新する
               setTimers(prev => {
                 const next = [];
                 newOrder.forEach(id => {
@@ -1302,7 +1339,7 @@
         return () => {
           sortable.destroy();
         };
-      }, []); // 依存配列を空にして無限再生成ループを防止
+      }, []);
 
       useEffect(() => {
         if (clipboardVal) setCustomInput(clipboardVal);
@@ -1311,10 +1348,10 @@
       const parsedCustom = parseInputDigits(customInput);
       const targetMs = parsedCustom ? parsedCustom.ms : selectedPresetMs;
 
-      // プリセットから即座に追加するための関数
+      // プリセットから即座に追加するための関数 (インクリメント重複不具合防止のためDate.now+ランダムIDに変更)
       const addTimerDirect = (ms, label = "") => {
         if (ms <= 0) return;
-        const newId = ++timerUniqueId;
+        const newId = Date.now() + Math.floor(Math.random() * 1000);
         setTimers(prev => [...prev, {
           id: newId,
           label: label,
@@ -1406,7 +1443,7 @@
                       key={idx}
                       preset={p}
                       isSelected={isSelected}
-                      onTap={() => { addTimerDirect(p.ms, p.l); }} // 1タップで項目が即時追加されるように修正
+                      onTap={() => { addTimerDirect(p.ms, p.l); }} 
                       onLongPress={() => openEditPresetDialog(p, idx)}
                     />
                   );
@@ -1601,7 +1638,8 @@
       useEffect(() => { accumulatedRef.current = accumulated; }, [accumulated]);
       useEffect(() => { startedAtRef.current = startedAt; }, [startedAt]);
 
-      useAnimationFrameTrigger(running);
+      // 動いている時だけ高速60FPSループ。停止中は無用な消費を遮断
+      useLowPowerTrigger(running ? "high" : "none");
 
       const elapsed = running ? accumulatedRef.current + (Date.now() - startedAtRef.current) : accumulatedRef.current;
 
@@ -1898,8 +1936,6 @@
 
       const copyToClipboard = () => {
         const sixDigits = formatTo6Digits(computedMs);
-        
-        // iframe制約に対応するため document.execCommand('copy') を使用
         const tempInput = document.createElement("input");
         tempInput.value = sixDigits;
         document.body.appendChild(tempInput);
@@ -1912,7 +1948,6 @@
           console.error("Copy failed");
         }
         document.body.removeChild(tempInput);
-        
         setClipboardVal(sixDigits);
       };
 
@@ -1996,7 +2031,6 @@
             </div>
           </div>
 
-          {/* 計算結果枠 - 負数の場合は赤枠＆赤文字警告 */}
           <div 
             className="bg-card border rounded-[10px] p-[8px_12px] flex items-center justify-between shrink-0 transition-all duration-300"
             style={{
@@ -2045,10 +2079,10 @@
       );
     }
 
-    // 出力画面/フローティングミニウィンドウ
-    function FloatingOutput({ sourceKey, cdTargets, timers, swState, cdSteal, tmSteal, onClose }) {
+    // 出力画面/フローティングミニウィンドウ (接続ディスプレイ同期ウィンドウ機能を統合)
+    function FloatingOutput({ sourceKey, cdTargets, timers, swState, cdSteal, tmSteal, onClose, onShowBlockAlert }) {
       const [position, setPosition] = useState({ x: 16, y: 80 });
-      const [size, setSize] = useState({ w: 240, h: 140 }); // 初期サイズ
+      const [size, setSize] = useState({ w: 240, h: 140 }); 
       
       const [showCloseBtn, setShowCloseBtn] = useState(false);
       const [labelWeight, setLabelWeight] = useState(0.35);
@@ -2061,52 +2095,241 @@
       const lastTapTime = useRef(0);
       const boxRef = useRef(null);
 
-      useAnimationFrameTrigger(true);
+      // 外部本物ウィンドウ（子ウィンドウ）のオブジェクトを追跡
+      const externalWinRef = useRef(null);
 
+      const getFloatingFpsMode = () => {
+        if (sourceKey.type === "sw") {
+          return swState.running ? "high" : "none";
+        }
+        if (sourceKey.type === "tm") {
+          const timer = timers.find(t => t.id === sourceKey.id);
+          return (timer && timer.running) ? "low" : "none";
+        }
+        const item = cdTargets.find(t => t.id === sourceKey.id);
+        if (item) {
+          const remaining = item.target - Date.now();
+          return remaining > 0 ? "low" : "none";
+        }
+        return "none";
+      };
+
+      const fpsMode = getFloatingFpsMode();
+      useLowPowerTrigger(fpsMode);
+
+      // 時間データの生成
       const itemInfo = (() => {
         const { type, id } = sourceKey;
 
         if (type === "cd") {
           const item = cdTargets.find(t => t.id === id);
-          if (!item) return { display: "–:–", color: colors.muted, label: "–" };
+          if (!item) return { display: "–:–", color: colors.muted, label: "–", progress: 0 };
           const remaining = item.target - Date.now() - (cdSteal > 0 ? cdSteal * 1000 : 0);
           const isPast = remaining <= 0;
           const displayMs = isPast ? Math.abs(remaining) : roundUpToSecond(remaining);
           return {
             display: (isPast ? "+" : "") + formatTime(displayMs),
-            color: isPast ? colors.red : colors.amber,
-            label: item.label || new Date(item.target).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+            color: isPast ? colors.red : isNearEndForCd(remaining) ? colors.amber : colors.white,
+            label: item.label || new Date(item.target).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+            progress: 0
           };
         }
 
         if (type === "tm") {
           const timer = timers.find(t => t.id === id);
-          if (!timer) return { display: "–:–", color: colors.muted, label: "–" };
+          if (!timer) return { display: "–:–", color: colors.muted, label: "–", progress: 0 };
           const baseRemaining = timer.running ? Math.max(0, timer.endAt - Date.now()) : timer.remaining;
           const offsetRemaining = tmSteal > 0 ? Math.max(0, baseRemaining - tmSteal * 1000) : baseRemaining;
           const displayMs = timer.done ? 0 : roundUpToSecond(offsetRemaining);
+          const progress = timer.totalMs > 0 ? Math.max(0, Math.min(1, baseRemaining / timer.totalMs)) : 1;
           
           const formattedTotal = formatTime(timer.totalMs);
           const displayLabel = timer.label 
             ? `${timer.label} → ${formattedTotal}` 
             : formattedTotal;
 
+          const isNear = baseRemaining < 10000 && baseRemaining > 0 && timer.running;
+
           return {
             display: timer.done ? "完了" : formatTime(displayMs),
-            color: timer.done ? colors.green : timer.running ? colors.blue : colors.mutedLight,
-            label: displayLabel
+            color: timer.done ? colors.green : timer.running ? (isNear ? colors.amber : colors.blue) : colors.mutedLight,
+            label: displayLabel,
+            progress: progress
           };
         }
 
+        // SW
         const stopwatchTotal = swState.accumulated;
         const stopwatchStart = swState.startedAt;
         const currentMs = swState.running ? stopwatchTotal + (Date.now() - stopwatchStart) : stopwatchTotal;
         return {
           display: currentMs < 60000 ? formatTimeMs(currentMs) : formatTime(currentMs),
           color: swState.running ? colors.green : colors.amber,
-          label: "ストップウォッチ"
+          label: "ストップウォッチ",
+          progress: 0
         };
       })();
+
+      function isNearEndForCd(diff) {
+        return diff > 0 && diff < 60000;
+      }
+
+      // 外部ウィンドウ（子ウィンドウ）の更新。毎ティック時に安全に変更を注入
+      useEffect(() => {
+        const extWin = externalWinRef.current;
+        if (extWin && !extWin.closed) {
+          const labelEl = extWin.document.getElementById('child-label');
+          const timeEl = extWin.document.getElementById('child-time');
+          const progContainer = extWin.document.getElementById('child-progress-container');
+          const progBar = extWin.document.getElementById('child-progress-bar');
+
+          if (labelEl) labelEl.textContent = itemInfo.label;
+          if (timeEl) {
+            timeEl.textContent = itemInfo.display;
+            timeEl.style.color = itemInfo.color;
+            timeEl.style.textShadow = `0 0 35px ${itemInfo.color}66`;
+          }
+          if (progContainer && progBar) {
+            if (sourceKey.type === 'tm' && itemInfo.progress > 0) {
+              progContainer.style.display = 'block';
+              progBar.style.width = `${itemInfo.progress * 100}%`;
+              progBar.style.background = itemInfo.color;
+              progBar.style.boxShadow = `0 0 10px ${itemInfo.color}88`;
+            } else {
+              progContainer.style.display = 'none';
+            }
+          }
+        }
+      }, [itemInfo, sourceKey.type]);
+
+      // 親コンポーネント消滅時に子ウィンドウも自動で破棄するクリーンアップ
+      useEffect(() => {
+        return () => {
+          if (externalWinRef.current && !externalWinRef.current.closed) {
+            externalWinRef.current.close();
+          }
+        };
+      }, []);
+
+      // 本物の別ブラウザウィンドウを外部モニター（外部ディスプレイ用）に生成
+      const handleOpenExternalWindow = (e) => {
+        e.stopPropagation();
+        
+        if (externalWinRef.current && !externalWinRef.current.closed) {
+          externalWinRef.current.focus();
+          return;
+        }
+
+        // ポップアップウィンドウの設定 (マルチモニター用に少し大きめかつレスポンシブ推奨設定)
+        const winWidth = 600;
+        const winHeight = 400;
+        const left = (window.screen.width - winWidth) / 2;
+        const top = (window.screen.height - winHeight) / 2;
+
+        const extWin = window.open(
+          'about:blank',
+          `tk_monitor_${Date.now()}`,
+          `width=${winWidth},height=${winHeight},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no`
+        );
+
+        if (!extWin) {
+          // ブロックされて開けない場合
+          onShowBlockAlert(true);
+          return;
+        }
+
+        // 子ウィンドウにスタイリングと構造を注入
+        const doc = extWin.document;
+        doc.write(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Timekeeper - Monitor Display</title>
+            <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet" />
+            <style>
+              html, body {
+                margin: 0;
+                padding: 0;
+                width: 100%;
+                height: 100%;
+                background-color: #06060e;
+                color: #dce0f8;
+                font-family: 'Rajdhani', sans-serif;
+                overflow: hidden;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                user-select: none;
+                -webkit-user-select: none;
+              }
+              #monitor-card {
+                width: 90%;
+                height: 85%;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                text-align: center;
+                box-sizing: border-box;
+                border: 2px solid rgba(220, 224, 248, 0.05);
+                border-radius: 24px;
+                background: radial-gradient(circle at center, #131325 0%, #06060e 100%);
+                padding: 24px;
+              }
+              #child-label {
+                font-size: 5vw;
+                font-weight: 700;
+                color: #8888aa;
+                margin-bottom: 2vh;
+                letter-spacing: 2px;
+                text-transform: uppercase;
+                line-clamp: 2;
+                display: -webkit-box;
+                -webkit-line-clamp: 2;
+                -webkit-box-orient: vertical;
+                overflow: hidden;
+                max-width: 90%;
+              }
+              #child-time {
+                font-family: 'Share Tech Mono', monospace;
+                font-size: 14vw;
+                font-weight: bold;
+                line-height: 1;
+                transition: color 0.3s ease;
+              }
+              #child-progress-container {
+                width: 80%;
+                height: 1.5vh;
+                background: rgba(34, 34, 58, 0.4);
+                border-radius: 99px;
+                margin-top: 5vh;
+                overflow: hidden;
+                display: none;
+                border: 1px solid rgba(255,255,255,0.03);
+              }
+              #child-progress-bar {
+                height: 100%;
+                width: 0%;
+                border-radius: 99px;
+                transition: width 0.2s linear;
+              }
+            </style>
+          </head>
+          <body>
+            <div id="monitor-card">
+              <div id="child-label">ロード中...</div>
+              <div id="child-time">--:--</div>
+              <div id="child-progress-container">
+                <div id="child-progress-bar"></div>
+              </div>
+            </div>
+          </body>
+          </html>
+        `);
+        doc.close();
+
+        externalWinRef.current = extWin;
+      };
 
       const handleDragStart = (e) => {
         if (e.target.closest('.no-drag') || isResizingDivider.current) return;
@@ -2239,13 +2462,25 @@
           }}
         >
           {showCloseBtn && (
-            <button
-              onPointerDown={(e) => { e.stopPropagation(); onClose(); }}
-              className="absolute top-2.5 right-2.5 w-6 h-6 bg-black/80 hover:bg-redCustom border border-redCustom/60 rounded-full text-redCustom hover:text-white text-xs font-bold cursor-pointer flex items-center justify-center transition-all z-[100] no-drag active:scale-90 font-sans"
-              style={{ boxShadow: `0 0 10px ${colors.redGlow}` }}
-            >
-              ✕
-            </button>
+            <div className="absolute top-2 right-2 flex gap-1.5 z-[100] no-drag">
+              {/* モニター分離ボタン */}
+              <button
+                onPointerDown={handleOpenExternalWindow}
+                title="外部モニターで表示"
+                className="w-6 h-6 bg-black/80 hover:bg-amberCustom border border-amberCustom/60 rounded-full text-amberCustom hover:text-bg text-xs font-bold cursor-pointer flex items-center justify-center transition-all active:scale-90 font-sans"
+                style={{ boxShadow: `0 0 8px ${colors.amberGlow}` }}
+              >
+                ↗
+              </button>
+              {/* 閉じるボタン */}
+              <button
+                onPointerDown={(e) => { e.stopPropagation(); onClose(); }}
+                className="w-6 h-6 bg-black/80 hover:bg-redCustom border border-redCustom/60 rounded-full text-redCustom hover:text-white text-xs font-bold cursor-pointer flex items-center justify-center transition-all active:scale-90 font-sans"
+                style={{ boxShadow: `0 0 8px ${colors.redGlow}` }}
+              >
+                ✕
+              </button>
+            </div>
           )}
 
           {/* 上段：ラベル表示エリア */}
@@ -2334,6 +2569,9 @@
       const [tmSteal, setTmSteal] = useState(0);
       const [activeOutputKey, setActiveOutputKey] = useState(null);
 
+      // ポップアップ警告用モーダル状態
+      const [showBlockAlert, setShowBlockAlert] = useState(false);
+
       const tabItems = [
         { id: "cd", label: "CD", icon: "⏰" },
         { id: "tm", label: "TM", icon: "⏳" },
@@ -2388,7 +2626,7 @@
               setTimers={setTimers}
               clipboardVal={clipboardValue}
               stealSec={tmSteal}
-              setStealSec={setTmSteal} // CDと同じsteal設定に同期するバグを「setTmSteal」へ修復完了！
+              setStealSec={setTmSteal} 
               onOpenOutput={(id) => setActiveOutputKey({ type: "tm", id })}
             />
           </div>
@@ -2416,7 +2654,33 @@
               cdSteal={cdSteal}
               tmSteal={tmSteal}
               onClose={() => setActiveOutputKey(null)}
+              onShowBlockAlert={setShowBlockAlert}
             />
+          )}
+
+          {/* ポップアップブロック警告用サイバーパンク風モーダル */}
+          {showBlockAlert && (
+            <div 
+              className="fixed inset-0 z-[500] bg-black/90 backdrop-blur-[6px] flex items-center justify-center p-5"
+              onClick={() => setShowBlockAlert(false)}
+            >
+              <div 
+                className="bg-card border border-redCustom rounded-[20px] p-[22px] w-full max-w-[320px] shadow-[0_0_24px_rgba(255,74,74,0.15)]"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ ...labelStyle, color: colors.red, marginBottom: 12 }} className="font-bold">⚠️ ポップアップブロック検出</div>
+                <div className="text-whiteCustom font-sans text-sm leading-relaxed mb-4 tracking-[0.5px]">
+                  ブラウザによって新規ウィンドウの起動がブロックされました。<br /><br />
+                  外部モニター表示機能を使用するには、Safariまたはブラウザの設定から<strong className="text-amberCustom">「ポップアップを許可」</strong>にするか、アドレスバー横の設定より許可を与えてください。
+                </div>
+                <button
+                  onClick={() => setShowBlockAlert(false)}
+                  className="w-full py-3 bg-redCustom/20 hover:bg-redCustom/35 border border-redCustom rounded-[10px] text-redCustom text-xs tracking-[1px] font-sans font-bold cursor-pointer transition-colors"
+                >
+                  閉じる
+                </button>
+              </div>
+            </div>
           )}
         </div>
       );
