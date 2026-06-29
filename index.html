@@ -373,7 +373,7 @@
                   className="bg-bg border border-amberCustom rounded-[10px] px-[14px] py-3 text-amberCustom text-[26px] font-mono tracking-[4px] outline-none w-full box-border mb-1.5 text-center"
                 />
                 <div className="font-mono text-xs text-mutedCustom mb-3.5 text-center tracking-[1px]">
-                  {inputValue ? `ターゲットの ${inputValue} 秒前にタイムアップ` : "秒数を入力"}
+                  {inputValue ? `ターゲット of ${inputValue} 秒前にタイムアップ` : "秒数を入力"}
                 </div>
                 <div className="flex gap-2">
                   <button
@@ -469,7 +469,7 @@
                   onKeyDown={(e) => e.key === "Enter" && saveManualTime()}
                   className="bg-bg border border-amberCustom rounded-[10px] px-[14px] py-3 text-amberCustom text-[26px] font-mono tracking-[4px] outline-none w-full box-border mb-1.5 text-center animate-none"
                 />
-                <div className="font-mono text-xs text-mutedCustom mb-3.5 pl-1 tracking-[2px]">
+                <div className="font-mono text-xs text-mutedCustom mb-3.5 pl-1 tracking-[2px] text-center">
                   {parseInputDigits(inputValue) ? `→ ${parseInputDigits(inputValue).str}` : "例: 143000 → 14:30:00"}
                 </div>
                 <div className="flex gap-2">
@@ -536,8 +536,8 @@
       );
     }
 
-    // カウントダウンアイテムコンポーネント (SortableJS適用のため Pointer Events 制御はすべて排除)
-    function CountdownItem({ item, onDelete, onMoveUp, onMoveDown, isFirst, isLast, steal, onOpenOutput }) {
+    // カウントダウンアイテムコンポーネント (SortableJS適用・スワイプアクション拡張仕様)
+    function CountdownItem({ item, onDelete, onMoveUp, onMoveDown, isFirst, isLast, steal, onOpenOutput, onEditLabel }) {
       const diffMs = item.target - Date.now() - (steal > 0 ? steal * 1000 : 0);
       const isPast = diffMs <= 0;
       const isNear = diffMs > 0 && diffMs < 60000;
@@ -550,7 +550,7 @@
       const startX = useRef(0);
       const isSwipedOpen = useRef(false);
       const lastTapTime = useRef(0);
-      const swipeLimit = 78;
+      const swipeLimit = 156; // 78px * 2つのボタン分に拡張
 
       const handleTouchStart = (e) => {
         if (e.target.closest('.no-drag')) return;
@@ -599,13 +599,25 @@
 
       return (
         <div data-id={item.id} className="relative overflow-hidden rounded-xl mb-1.5" style={{ height: '74px' }}>
-          <div className="absolute inset-y-0 right-0 w-[78px] flex no-drag">
+          {/* 左スワイプで出現するアクション裏レイヤー (ラベルボタン & 削除ボタン) */}
+          <div className="absolute inset-y-0 right-0 w-[156px] flex no-drag">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setTranslateX(0);
+                isSwipedOpen.current = false;
+                onEditLabel(item.id, item.label || "");
+              }}
+              className="flex-1 border-none bg-blueCustom text-white font-sans text-xs font-bold cursor-pointer active:brightness-90"
+            >
+              ✏️<br />ラベル
+            </button>
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onDelete(item.id);
               }}
-              className="flex-1 border-none bg-redCustom text-white font-sans text-xs font-bold cursor-pointer font-sans"
+              className="flex-1 border-none bg-redCustom text-white font-sans text-xs font-bold cursor-pointer active:brightness-90"
             >
               🗑<br />削除
             </button>
@@ -681,47 +693,44 @@
       const [orderList, setOrderList] = useState([]);
       const [anyDragging, setAnyDragging] = useState(false);
 
+      // インメモリ編集ダイアログ用ステート
+      const [labelEditItem, setLabelEditItem] = useState(null);
+
       const inputRef = useRef(null);
       const scrollContainerRef = useRef(null);
 
       useAnimationFrameTrigger(true);
 
-      // SortableJSの初期化＆ReactのStateの完璧な双方向バインド (依存配列を空にして無限マウントループを根絶！)
+      // SortableJSの初期化
       useEffect(() => {
         if (!scrollContainerRef.current) return;
 
         const sortable = Sortable.create(scrollContainerRef.current, {
-          delay: 400, // 長押し0.4秒
-          delayOnTouchOnly: true, // タッチデバイスのみディレイ
-          touchStartThreshold: 5, // タッチ中に指が少し動いたらキャンセル
-          animation: 200, // スライドのスピード
-          ghostClass: 'sortable-ghost', // ドラッグ跡地
-          chosenClass: 'sortable-chosen', // ドラッグ対象
-          filter: '.no-drag', // ドラッグ禁止領域のクラス
-          preventOnFilter: false, // 外部ブラウザでのボタン動作不全を100%解決
+          delay: 400,
+          delayOnTouchOnly: true,
+          touchStartThreshold: 5,
+          animation: 200,
+          ghostClass: 'sortable-ghost',
+          chosenClass: 'sortable-chosen',
+          filter: '.no-drag',
+          preventOnFilter: false,
           
           onStart: function () {
             setAnyDragging(true);
             if (navigator.vibrate) {
-              navigator.vibrate(30); // わずかにバイブレーション
+              navigator.vibrate(30);
             }
           },
           onEnd: function (evt) {
             setAnyDragging(false);
             
-            // SortableJSが物理的に移動させたDOMノードを一度元の位置に戻す
             if (evt.oldIndex !== evt.newIndex) {
               const parent = evt.from;
               const item = evt.item;
               const referenceNode = parent.children[evt.oldIndex > evt.newIndex ? evt.oldIndex + 1 : evt.oldIndex];
               
-              // 1. まず SortableJS が並び替えた現在のDOM配列に基づいて「新しいID順序（数値型）」を取得する
               const newOrder = Array.from(parent.children).map(el => Number(el.getAttribute('data-id')));
-              
-              // 2. 次に SortableJS の物理移動をリセットし、親要素に元のDOM順序を復元する
               parent.insertBefore(item, referenceNode);
-
-              // 3. ReactのStateを新しい順序に更新する。これで仮想DOMと物理DOMが完璧に一致して並び替わります
               setOrderList(newOrder);
             }
           }
@@ -730,7 +739,7 @@
         return () => {
           sortable.destroy();
         };
-      }, []); // 空の配列により安定生成を保証
+      }, []);
 
       useEffect(() => {
         if (clipboardVal) setInputVal(clipboardVal);
@@ -791,6 +800,13 @@
           [next[index], next[swapIdx]] = [next[swapIdx], next[index]];
           return next;
         });
+      };
+
+      // ラベル編集保存処理
+      const handleSaveLabel = () => {
+        if (!labelEditItem) return;
+        setTargets(prev => prev.map(t => t.id === labelEditItem.id ? { ...t, label: labelEditItem.label.trim() } : t));
+        setLabelEditItem(null);
       };
 
       const sortedTargets = orderList.map(id => targets.find(t => t.id === id)).filter(Boolean);
@@ -871,7 +887,7 @@
                 <button
                   onClick={handleAddSubmit}
                   disabled={!parsedInput}
-                  className="px-3.5 py-1.5 rounded-lg text-xs font-sans font-bold cursor-pointer font-sans"
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-sans font-bold cursor-pointer"
                   style={{
                     background: parsedInput ? colors.amber : colors.gray,
                     color: parsedInput ? "#06060e" : colors.muted
@@ -904,16 +920,55 @@
                   onMoveUp={() => reorderItems(idx, -1)}
                   onMoveDown={() => reorderItems(idx, 1)}
                   onOpenOutput={onOpenOutput}
+                  onEditLabel={(id, label) => setLabelEditItem({ id, label })}
                 />
               ))
             )}
           </div>
+
+          {/* カウントダウンラベル編集用インメモリモーダル */}
+          {labelEditItem && (
+            <div 
+              className="fixed inset-0 z-[300] bg-black/90 backdrop-blur-[6px] flex items-center justify-center p-5"
+              onClick={() => setLabelEditItem(null)}
+            >
+              <div 
+                className="bg-card border border-border rounded-[20px] p-[22px] w-full max-w-[320px]"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ ...labelStyle, marginBottom: 14 }}>ラベルを編集</div>
+                <input
+                  autoFocus
+                  type="text"
+                  value={labelEditItem.label}
+                  onChange={(e) => setLabelEditItem({ ...labelEditItem, label: e.target.value })}
+                  onKeyDown={(e) => e.key === "Enter" && handleSaveLabel()}
+                  className="bg-bg border border-blueCustom rounded-[10px] px-[14px] py-2.5 text-whiteCustom text-[15px] outline-none w-full box-border mb-4"
+                  placeholder="ラベルを入力してください"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleSaveLabel}
+                    className="flex-1 py-3 bg-blueCustom rounded-[10px] text-bg text-xs tracking-[1px] font-sans font-bold cursor-pointer border-none"
+                  >
+                    ✓ 保存
+                  </button>
+                  <button
+                    onClick={() => setLabelEditItem(null)}
+                    className="py-3 px-4 bg-surface border border-border rounded-[10px] text-mutedCustom text-xs font-sans cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       );
     }
 
     // タイマーアイテムコンポーネント (Pointer Event による SortableJS インターセプト保護を完全に撤去し onClick へ安全配置)
-    function TimerItem({ timer, onUpdate, onDelete, onMoveUp, onMoveDown, isFirst, isLast, steal, onOpenOutput }) {
+    function TimerItem({ timer, onUpdate, onDelete, onMoveUp, onMoveDown, isFirst, isLast, steal, onOpenOutput, onEditLabel }) {
       useAnimationFrameTrigger(timer.running);
 
       const [translateX, setTranslateX] = useState(0);
@@ -922,7 +977,7 @@
       const startX = useRef(0);
       const isSwipedOpen = useRef(false);
       const lastTapTime = useRef(0);
-      const swipeLimit = 78;
+      const swipeLimit = 156; // 78px * 2つのボタン分に拡張
 
       const deltaMs = timer.running ? timer.endAt - Date.now() : timer.remaining;
       const isOver = deltaMs < 0 && timer.running;
@@ -981,13 +1036,25 @@
 
       return (
         <div data-id={timer.id} className="relative overflow-hidden rounded-xl mb-[6px]" style={{ height: '110px' }}>
-          <div className="absolute inset-y-0 right-0 w-[78px] flex no-drag">
+          {/* 左スワイプで出現するアクション裏レイヤー (ラベルボタン & 削除ボタン) */}
+          <div className="absolute inset-y-0 right-0 w-[156px] flex no-drag">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setTranslateX(0);
+                isSwipedOpen.current = false;
+                onEditLabel(timer.id, timer.label || "");
+              }}
+              className="flex-1 border-none bg-blueCustom text-white font-sans text-xs font-bold cursor-pointer active:brightness-90"
+            >
+              ✏️<br />ラベル
+            </button>
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onDelete(timer.id);
               }}
-              className="flex-1 border-none bg-redCustom text-white font-sans text-xs font-bold cursor-pointer font-sans"
+              className="flex-1 border-none bg-redCustom text-white font-sans text-xs font-bold cursor-pointer active:brightness-90"
             >
               🗑<br />削除
             </button>
@@ -1080,7 +1147,7 @@
                   </button>
                 )}
                 {timer.done && (
-                  <div className="w-full h-[54px] flex items-center justify-center text-greenCustom text-[12px] font-sans font-bold font-sans">
+                  <div className="w-full h-[54px] flex items-center justify-center text-greenCustom text-[12px] font-sans font-bold">
                     ✓完了
                   </div>
                 )}
@@ -1152,6 +1219,9 @@
       const [labelVal, setLabelVal] = useState("");
       const [selectedPresetMs, setSelectedPresetMs] = useState(0);
       const [anyDragging, setAnyDragging] = useState(false);
+
+      // インメモリ編集ダイアログ用ステート
+      const [labelEditItem, setLabelEditItem] = useState(null);
 
       const scrollContainerRef = useRef(null);
 
@@ -1241,18 +1311,24 @@
       const parsedCustom = parseInputDigits(customInput);
       const targetMs = parsedCustom ? parsedCustom.ms : selectedPresetMs;
 
-      const createTimer = () => {
-        if (targetMs <= 0) return;
+      // プリセットから即座に追加するための関数
+      const addTimerDirect = (ms, label = "") => {
+        if (ms <= 0) return;
         const newId = ++timerUniqueId;
         setTimers(prev => [...prev, {
           id: newId,
-          label: labelVal,
-          totalMs: targetMs,
-          remaining: targetMs,
+          label: label,
+          totalMs: ms,
+          remaining: ms,
           running: false,
           done: false,
           endAt: null
         }]);
+      };
+
+      const createTimer = () => {
+        if (targetMs <= 0) return;
+        addTimerDirect(targetMs, labelVal);
         setLabelVal("");
         setCustomInput("");
         setSelectedPresetMs(0);
@@ -1266,6 +1342,13 @@
           [next[index], next[swapIdx]] = [next[swapIdx], next[index]];
           return next;
         });
+      };
+
+      // ラベル編集保存処理
+      const handleSaveLabel = () => {
+        if (!labelEditItem) return;
+        setTimers(prev => prev.map(t => t.id === labelEditItem.id ? { ...t, label: labelEditItem.label.trim() } : t));
+        setLabelEditItem(null);
       };
 
       const openNewPresetDialog = () => {
@@ -1323,7 +1406,7 @@
                       key={idx}
                       preset={p}
                       isSelected={isSelected}
-                      onTap={() => { setSelectedPresetMs(p.ms); setCustomInput(""); }}
+                      onTap={() => { addTimerDirect(p.ms, p.l); }} // 1タップで項目が即時追加されるように修正
                       onLongPress={() => openEditPresetDialog(p, idx)}
                     />
                   );
@@ -1398,10 +1481,49 @@
                   onMoveUp={() => reorderTimers(idx, -1)}
                   onMoveDown={() => reorderTimers(idx, 1)}
                   onOpenOutput={onOpenOutput}
+                  onEditLabel={(id, label) => setLabelEditItem({ id, label })}
                 />
               ))
             )}
           </div>
+
+          {/* タイマーラベル編集用インメモリモーダル */}
+          {labelEditItem && (
+            <div 
+              className="fixed inset-0 z-[300] bg-black/90 backdrop-blur-[6px] flex items-center justify-center p-5"
+              onClick={() => setLabelEditItem(null)}
+            >
+              <div 
+                className="bg-card border border-border rounded-[20px] p-[22px] w-full max-w-[320px]"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ ...labelStyle, marginBottom: 14 }}>ラベルを編集</div>
+                <input
+                  autoFocus
+                  type="text"
+                  value={labelEditItem.label}
+                  onChange={(e) => setLabelEditItem({ ...labelEditItem, label: e.target.value })}
+                  onKeyDown={(e) => e.key === "Enter" && handleSaveLabel()}
+                  className="bg-bg border border-blueCustom rounded-[10px] px-[14px] py-2.5 text-whiteCustom text-[15px] outline-none w-full box-border mb-4"
+                  placeholder="ラベルを入力してください"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleSaveLabel}
+                    className="flex-1 py-3 bg-blueCustom rounded-[10px] text-bg text-xs tracking-[1px] font-sans font-bold cursor-pointer border-none"
+                  >
+                    ✓ 保存
+                  </button>
+                  <button
+                    onClick={() => setLabelEditItem(null)}
+                    className="py-3 px-4 bg-surface border border-border rounded-[10px] text-mutedCustom text-xs font-sans cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* プリセット登録・編集モーダル */}
           {presetModalOpen && (
@@ -1894,7 +2016,7 @@
               </div>
             </div>
             <button
-              onClick={copyToClipboard}
+              onPointerDown={(e) => { e.stopPropagation(); copyToClipboard(); }}
               className="px-3 py-2 border rounded-lg text-[10px] tracking-[1px] font-sans font-bold cursor-pointer transition-all duration-200 font-sans"
               style={{
                 background: copySuccess ? colors.card : isNegative ? colors.redGlow : colors.greenGlow,
@@ -2118,7 +2240,7 @@
         >
           {showCloseBtn && (
             <button
-              onClick={(e) => { e.stopPropagation(); onClose(); }}
+              onPointerDown={(e) => { e.stopPropagation(); onClose(); }}
               className="absolute top-2.5 right-2.5 w-6 h-6 bg-black/80 hover:bg-redCustom border border-redCustom/60 rounded-full text-redCustom hover:text-white text-xs font-bold cursor-pointer flex items-center justify-center transition-all z-[100] no-drag active:scale-90 font-sans"
               style={{ boxShadow: `0 0 10px ${colors.redGlow}` }}
             >
