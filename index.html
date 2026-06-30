@@ -281,13 +281,11 @@
       }, []);
 
       useEffect(() => {
-        // バックグラウンド非表示、または稼働モードが "none" の場合はループを完全遮断（CPU消費ゼロ）
         if (!isPageVisible || mode === "none") {
           return;
         }
 
         if (mode === "high") {
-          // ストップウォッチなどのミリ秒描写用高速 60FPS ループ
           let active = true;
           const loop = () => {
             if (!active) return;
@@ -300,7 +298,6 @@
             if (timerRef.current) cancelAnimationFrame(timerRef.current);
           };
         } else {
-          // カウントダウンや通常のタイマー更新用省電力 200ms ループ（秒間5回）
           const interval = setInterval(() => {
             setTick(t => t + 1);
           }, 200);
@@ -417,12 +414,15 @@
       );
     }
 
-    // 時刻手動設定ダイアログ付き現在時刻・オフセット時計
-    function HeaderClock({ offsetMs, setOffsetMs }) {
+    // 時刻手動設定ダイアログ付き現在時刻・オフセット時計 (競合のない安全なダブルタップ ＆ 長押し両立構造)
+    function HeaderClock({ offsetMs, setOffsetMs, onDoubleTap }) {
       const [, setTick] = useState(0);
       const [showModal, setShowModal] = useState(false);
       const [inputValue, setInputValue] = useState("");
+      
       const timerRef = useRef(null);
+      const isLongPressed = useRef(false);
+      const lastTap = useRef(0);
 
       useEffect(() => {
         let interval;
@@ -452,14 +452,40 @@
       const targetTime = new Date(Date.now() + offsetMs);
 
       const handlePointerDown = (e) => {
-        e.preventDefault();
+        isLongPressed.current = false;
+        if (timerRef.current) clearTimeout(timerRef.current);
+        
         timerRef.current = setTimeout(() => {
+          isLongPressed.current = true;
           setInputValue(`${pad(targetTime.getHours())}${pad(targetTime.getMinutes())}${pad(targetTime.getSeconds())}`);
           setShowModal(true);
+          if (navigator.vibrate) {
+            navigator.vibrate(40);
+          }
         }, 600);
       };
 
-      const handlePointerUp = () => clearTimeout(timerRef.current);
+      const handlePointerUp = (e) => {
+        if (timerRef.current) clearTimeout(timerRef.current);
+        
+        // すでに長押し(600ms)が成立した後は、指を離した時のタップ処理をスキップ
+        if (isLongPressed.current) {
+          isLongPressed.current = false;
+          return;
+        }
+
+        const now = Date.now();
+        if (now - lastTap.current < 300) {
+          if (onDoubleTap) onDoubleTap();
+          lastTap.current = 0;
+        } else {
+          lastTap.current = now;
+        }
+      };
+
+      const handlePointerLeave = () => {
+        if (timerRef.current) clearTimeout(timerRef.current);
+      };
 
       const saveManualTime = () => {
         const parsed = parseInputDigits(inputValue);
@@ -476,7 +502,7 @@
           <div
             onPointerDown={handlePointerDown}
             onPointerUp={handlePointerUp}
-            onPointerLeave={handlePointerUp}
+            onPointerLeave={handlePointerLeave}
             className="text-right cursor-pointer select-none leading-[1.2]"
           >
             <div 
@@ -591,7 +617,7 @@
       const startX = useRef(0);
       const isSwipedOpen = useRef(false);
       const lastTapTime = useRef(0);
-      const swipeLimit = 156; // 78px * 2つのボタン分に拡張
+      const swipeLimit = 156;
 
       const handleTouchStart = (e) => {
         if (e.target.closest('.no-drag')) return;
@@ -640,7 +666,6 @@
 
       return (
         <div data-id={item.id} className="relative overflow-hidden rounded-xl mb-1.5" style={{ height: '74px' }}>
-          {/* 左スワイプで出現するアクション裏レイヤー (ラベルボタン & 削除ボタン) */}
           <div className="absolute inset-y-0 right-0 w-[156px] flex no-drag">
             <button
               onClick={(e) => {
@@ -733,17 +758,13 @@
       const [showSave, setShowSave] = useState(false);
       const [orderList, setOrderList] = useState([]);
       const [anyDragging, setAnyDragging] = useState(false);
-
-      // インメモリ編集ダイアログ用ステート
       const [labelEditItem, setLabelEditItem] = useState(null);
 
       const inputRef = useRef(null);
       const scrollContainerRef = useRef(null);
 
-      // 節電200ms間引きループ
       useLowPowerTrigger("low");
 
-      // SortableJSの初期化
       useEffect(() => {
         if (!scrollContainerRef.current) return;
 
@@ -765,12 +786,10 @@
           },
           onEnd: function (evt) {
             setAnyDragging(false);
-            
             if (evt.oldIndex !== evt.newIndex) {
               const parent = evt.from;
               const item = evt.item;
               const referenceNode = parent.children[evt.oldIndex > evt.newIndex ? evt.oldIndex + 1 : evt.oldIndex];
-              
               const newOrder = Array.from(parent.children).map(el => Number(el.getAttribute('data-id')));
               parent.insertBefore(item, referenceNode);
               setOrderList(newOrder);
@@ -844,7 +863,6 @@
         });
       };
 
-      // ラベル編集保存処理
       const handleSaveLabel = () => {
         if (!labelEditItem) return;
         setTargets(prev => prev.map(t => t.id === labelEditItem.id ? { ...t, label: labelEditItem.label.trim() } : t));
@@ -968,7 +986,6 @@
             )}
           </div>
 
-          {/* カウントダウンラベル編集用インメモリモーダル */}
           {labelEditItem && (
             <div 
               className="fixed inset-0 z-[300] bg-black/90 backdrop-blur-[6px] flex items-center justify-center p-5"
@@ -1011,17 +1028,16 @@
 
     // タイマーアイテムコンポーネント (省電力200msループ駆動 & 左右双方向スワイプ対応)
     function TimerItem({ timer, onUpdate, onDelete, onMoveUp, onMoveDown, isFirst, isLast, steal, onOpenOutput, onEditLabel }) {
-      // 200ms間隔の省電力更新。タイマーが止まっている時はループ遮断
       useLowPowerTrigger(timer.running ? "low" : "none");
 
       const [translateX, setTranslateX] = useState(0);
       const [isSwiping, setIsSwiping] = useState(false);
 
       const startX = useRef(0);
-      const swipeState = useRef('closed'); // 'closed', 'left' (スワイプ中含む左開き), 'right' (右開き)
+      const swipeState = useRef('closed');
       const lastTapTime = useRef(0);
-      const swipeLimitLeft = 156;  // 左スワイプ（ラベル、削除ボタン：78px * 2）
-      const swipeLimitRight = 120; // 右スワイプ（経過時間表示幅：120px）
+      const swipeLimitLeft = 156;
+      const swipeLimitRight = 120;
 
       const deltaMs = timer.running ? timer.endAt - Date.now() : timer.remaining;
       const isOver = deltaMs < 0 && timer.running;
@@ -1032,7 +1048,6 @@
       const currentColor = isOver ? colors.red : timer.done ? colors.green : isNearEnd ? colors.amber : colors.blue;
       const displayMs = timer.done ? 0 : isOver ? deltaMs : roundUpToSecond(Math.max(0, offsetMs));
 
-      // 経過した時間（カウントアップ）
       const elapsedTime = Math.max(0, timer.totalMs - deltaMs);
 
       const handleTouchStart = (e) => {
@@ -1052,7 +1067,6 @@
         }
         
         let tx = currentOffset + deltaX;
-        // 左右の最大可動幅を制限
         tx = Math.max(-swipeLimitLeft, Math.min(swipeLimitRight, tx));
         setTranslateX(tx);
       };
@@ -1094,8 +1108,6 @@
 
       return (
         <div data-id={timer.id} className="relative overflow-hidden rounded-xl mb-[6px]" style={{ height: '110px' }}>
-          
-          {/* 右スワイプで出現するアクション裏レイヤー (経過した時間を表示) */}
           <div 
             className="absolute inset-y-0 left-0 flex items-center justify-center bg-blueGlow border-r border-blueCustom/20 no-drag rounded-l-xl transition-opacity duration-150"
             style={{ 
@@ -1111,7 +1123,6 @@
             </div>
           </div>
 
-          {/* 左スワイプで出現するアクション裏レイヤー (ラベルボタン & 削除ボタン) */}
           <div 
             className="absolute inset-y-0 right-0 w-[156px] flex no-drag transition-opacity duration-150"
             style={{
@@ -1140,7 +1151,6 @@
             </button>
           </div>
 
-          {/* スライド本体カード */}
           <div
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
@@ -1155,7 +1165,6 @@
             }}
           >
             <div className="flex items-center justify-between gap-[8px] pb-2.5">
-              {/* 左側矢印ボタン */}
               <div className="flex flex-col gap-[3px] shrink-0 no-drag">
                 <button 
                   onClick={(e) => { e.stopPropagation(); onMoveUp(); }}
@@ -1175,7 +1184,6 @@
                 </button>
               </div>
 
-              {/* 中央巨大数字＆ラベル */}
               <div className="flex-1 min-w-0 px-1">
                 <div className="font-sans text-[22px] font-bold text-whiteCustom leading-tight overflow-hidden text-ellipsis whitespace-nowrap">
                   {displayLabel}
@@ -1188,7 +1196,6 @@
                 </div>
               </div>
 
-              {/* 右側ボタン */}
               <div className="flex flex-col gap-[6px] shrink-0 w-[84px] no-drag">
                 <button
                   onClick={(e) => {
@@ -1235,7 +1242,6 @@
               </div>
             </div>
 
-            {/* タイマー進捗バー */}
             <div className="h-1 -mx-3 bg-border/20 overflow-hidden">
               <div 
                 className="h-full"
@@ -1252,7 +1258,7 @@
       );
     }
 
-    // 各プリセットボタン（選択状態の青ネオン枠光り仕様）
+    // 各プリセットボタン
     function CustomPresetButton({ preset, isSelected, onTap, onLongPress }) {
       const timerRef = useRef(null);
       const isLongPress = useRef(false);
@@ -1300,13 +1306,10 @@
       const [labelVal, setLabelVal] = useState("");
       const [selectedPresetMs, setSelectedPresetMs] = useState(0);
       const [anyDragging, setAnyDragging] = useState(false);
-
-      // インメモリ編集ダイアログ用ステート
       const [labelEditItem, setLabelEditItem] = useState(null);
 
       const scrollContainerRef = useRef(null);
 
-      // ユーザー設定プリセット (永続化)
       const [presets, setPresets] = useState(() => {
         try {
           const saved = localStorage.getItem("tk_tm_presets_v4");
@@ -1326,18 +1329,16 @@
         }
       });
 
-      // プリセット作成・編集用モーダルステート
       const [presetModalOpen, setPresetModalOpen] = useState(false);
       const [presetEditTarget, setPresetEditTarget] = useState(null);
       const [presetModalLabel, setPresetModalLabel] = useState("");
       const [presetModalInput, setPresetModalInput] = useState("");
 
-      // SortableJSの初期化＆ReactのStateの完璧な双方向バインド
       useEffect(() => {
         if (!scrollContainerRef.current) return;
 
         const sortable = Sortable.create(scrollContainerRef.current, {
-          delay: 400, // 長押し0.4秒
+          delay: 400,
           delayOnTouchOnly: true,
           touchStartThreshold: 5,
           animation: 200,
@@ -1354,7 +1355,6 @@
           },
           onEnd: function (evt) {
             setAnyDragging(false);
-            
             if (evt.oldIndex !== evt.newIndex) {
               const parent = evt.from;
               const item = evt.item;
@@ -1386,7 +1386,6 @@
       const parsedCustom = parseInputDigits(customInput);
       const targetMs = parsedCustom ? parsedCustom.ms : selectedPresetMs;
 
-      // プリセットから即座に追加するための関数 (インクリメント重複不具合防止のためDate.now+ランダムIDに変更)
       const addTimerDirect = (ms, label = "") => {
         if (ms <= 0) return;
         const newId = Date.now() + Math.floor(Math.random() * 1000);
@@ -1419,7 +1418,6 @@
         });
       };
 
-      // ラベル編集保存処理
       const handleSaveLabel = () => {
         if (!labelEditItem) return;
         setTimers(prev => prev.map(t => t.id === labelEditItem.id ? { ...t, label: labelEditItem.label.trim() } : t));
@@ -1562,7 +1560,6 @@
             )}
           </div>
 
-          {/* タイマーラベル編集用インメモリモーダル */}
           {labelEditItem && (
             <div 
               className="fixed inset-0 z-[300] bg-black/90 backdrop-blur-[6px] flex items-center justify-center p-5"
@@ -1600,7 +1597,6 @@
             </div>
           )}
 
-          {/* プリセット登録・編集モーダル */}
           {presetModalOpen && (
             <div 
               className="fixed inset-0 z-[300] bg-black/90 backdrop-blur-[6px] flex items-center justify-center p-5"
@@ -1676,7 +1672,6 @@
       useEffect(() => { accumulatedRef.current = accumulated; }, [accumulated]);
       useEffect(() => { startedAtRef.current = startedAt; }, [startedAt]);
 
-      // 動いている時だけ高速60FPSループ。停止中は無用な消費を遮断
       useLowPowerTrigger(running ? "high" : "none");
 
       const elapsed = running ? accumulatedRef.current + (Date.now() - startedAtRef.current) : accumulatedRef.current;
@@ -1699,6 +1694,7 @@
           setSwState(prev => ({ ...prev, running: false, accumulated: finalElapsed, startedAt: null }));
         } else {
           const now = Date.now();
+          startedAtRef.current = now;
           startedAtRef.current = now;
           setSwState(prev => ({ ...prev, running: true, startedAt: now }));
         }
@@ -1833,7 +1829,6 @@
           </div>
 
           <div className="flex-1 min-h-0 flex gap-1.5 overflow-hidden">
-            {/* LAP1 リスト */}
             <div className="flex-1 min-h-0 bg-card border border-border rounded-xl overflow-hidden flex flex-col">
               <div className="p-[5px_10px_4px] border-b border-border/20 shrink-0">
                 <div style={{ ...labelStyle, fontSize: 8 }}>
@@ -1880,7 +1875,6 @@
               )}
             </div>
 
-            {/* LAP2 リスト */}
             <div className="flex-1 min-h-0 bg-card border border-blueCustom/30 rounded-xl overflow-hidden flex flex-col">
               <div className="p-[5px_10px_4px] border-b border-border/20 shrink-0">
                 <div style={{ ...labelStyle, fontSize: 8, color: colors.blue }}>
@@ -1918,7 +1912,7 @@
       );
     }
 
-    // 電卓コンポーネント ( Wd コンポーネント )
+    // 電卓
     function CalculatorManager({ setClipboardVal }) {
       const [expression, setExpression] = useState("");
       const [copySuccess, setCopySuccess] = useState(false);
@@ -2117,7 +2111,7 @@
       );
     }
 
-    // 出力画面/フローティングミニウィンドウ (接続ディスプレイ同期ウィンドウ機能を統合)
+    // 出力画面/フローティングミニウィンドウ
     function FloatingOutput({ sourceKey, cdTargets, timers, swState, cdSteal, tmSteal, onClose, onShowBlockAlert }) {
       const [position, setPosition] = useState({ x: 16, y: 80 });
       const [size, setSize] = useState({ w: 240, h: 140 }); 
@@ -2133,7 +2127,6 @@
       const lastTapTime = useRef(0);
       const boxRef = useRef(null);
 
-      // 外部本物ウィンドウ（子ウィンドウ）のオブジェクトを追跡
       const externalWinRef = useRef(null);
 
       const getFloatingFpsMode = () => {
@@ -2155,7 +2148,6 @@
       const fpsMode = getFloatingFpsMode();
       useLowPowerTrigger(fpsMode);
 
-      // 時間データの生成
       const itemInfo = (() => {
         const { type, id } = sourceKey;
 
@@ -2167,7 +2159,7 @@
           const displayMs = isPast ? Math.abs(remaining) : roundUpToSecond(remaining);
           return {
             display: (isPast ? "+" : "") + formatTime(displayMs),
-            color: isPast ? colors.red : isNearEndForCd(remaining) ? colors.amber : colors.white,
+            color: isPast ? colors.red : (remaining > 0 && remaining < 60000) ? colors.amber : colors.white,
             label: item.label || new Date(item.target).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
             progress: 0
           };
@@ -2196,7 +2188,6 @@
           };
         }
 
-        // SW
         const stopwatchTotal = swState.accumulated;
         const stopwatchStart = swState.startedAt;
         const currentMs = swState.running ? stopwatchTotal + (Date.now() - stopwatchStart) : stopwatchTotal;
@@ -2208,11 +2199,6 @@
         };
       })();
 
-      function isNearEndForCd(diff) {
-        return diff > 0 && diff < 60000;
-      }
-
-      // 外部ウィンドウ（子ウィンドウ）の更新。毎ティック時に安全に変更を注入
       useEffect(() => {
         const extWin = externalWinRef.current;
         if (extWin && !extWin.closed) {
@@ -2240,7 +2226,6 @@
         }
       }, [itemInfo, sourceKey.type]);
 
-      // 親コンポーネント消滅時に子ウィンドウも自動で破棄するクリーンアップ
       useEffect(() => {
         return () => {
           if (externalWinRef.current && !externalWinRef.current.closed) {
@@ -2249,7 +2234,6 @@
         };
       }, []);
 
-      // 本物の別ブラウザウィンドウを外部モニター（外部ディスプレイ用）に生成
       const handleOpenExternalWindow = (e) => {
         e.stopPropagation();
         
@@ -2258,7 +2242,6 @@
           return;
         }
 
-        // ポップアップウィンドウの設定 (マルチモニター用に少し大きめかつレスポンシブ推奨設定)
         const winWidth = 600;
         const winHeight = 400;
         const left = (window.screen.width - winWidth) / 2;
@@ -2271,12 +2254,10 @@
         );
 
         if (!extWin) {
-          // ブロックされて開けない場合
           onShowBlockAlert(true);
           return;
         }
 
-        // 子ウィンドウにスタイリングと構造を注入
         const doc = extWin.document;
         doc.write(`
           <!DOCTYPE html>
@@ -2501,7 +2482,6 @@
         >
           {showCloseBtn && (
             <div className="absolute top-2 right-2 flex gap-1.5 z-[100] no-drag">
-              {/* モニター分離ボタン */}
               <button
                 onPointerDown={handleOpenExternalWindow}
                 title="外部モニターで表示"
@@ -2510,7 +2490,6 @@
               >
                 ↗
               </button>
-              {/* 閉じるボタン */}
               <button
                 onPointerDown={(e) => { e.stopPropagation(); onClose(); }}
                 className="w-6 h-6 bg-black/80 hover:bg-redCustom border border-redCustom/60 rounded-full text-redCustom hover:text-white text-xs font-bold cursor-pointer flex items-center justify-center transition-all active:scale-90 font-sans"
@@ -2521,7 +2500,6 @@
             </div>
           )}
 
-          {/* 上段：ラベル表示エリア */}
           <div 
             className="w-full flex items-center justify-center px-4 overflow-hidden text-center transition-all"
             style={{ height: labelHeight }}
@@ -2538,7 +2516,6 @@
             </div>
           </div>
 
-          {/* ドラッグ境界線スライダー */}
           <div
             onPointerDown={handleDividerPointerDown}
             onPointerMove={handleDividerPointerMove}
@@ -2555,7 +2532,6 @@
             />
           </div>
 
-          {/* 下段：タイム表示エリア */}
           <div 
             className="w-full flex items-center justify-center px-4 overflow-hidden transition-all"
             style={{ height: timeHeight }}
@@ -2572,7 +2548,6 @@
             </div>
           </div>
 
-          {/* 右下のリサイズハンドル */}
           <div
             onPointerDown={handleResizeStart}
             onPointerMove={handleResizeMove}
@@ -2584,6 +2559,164 @@
               <path d="M10 1 L1 10 M10 5 L5 10 M10 9 L9 10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
             </svg>
           </div>
+        </div>
+      );
+    }
+
+    // 横画面ビューコンポーネント (微細なサイズ調整、はみ出しを防ぎ完璧に収めるチューニング版)
+    function LandscapeView({ offsetMs, activeOutputKey, cdTargets, timers, swState, cdSteal, tmSteal, onClose }) {
+      const [, setTick] = useState(0);
+      const lastTap = useRef(0);
+
+      const getFpsMode = () => {
+        if (!activeOutputKey) return "low";
+        if (activeOutputKey.type === "sw") {
+          return swState.running ? "high" : "low";
+        }
+        if (activeOutputKey.type === "tm") {
+          const timer = timers.find(t => t.id === activeOutputKey.id);
+          return (timer && timer.running) ? "low" : "low";
+        }
+        return "low";
+      };
+
+      useLowPowerTrigger(getFpsMode());
+
+      const handleTap = () => {
+        const now = Date.now();
+        if (now - lastTap.current < 300) {
+          onClose();
+          lastTap.current = 0;
+        } else {
+          lastTap.current = now;
+        }
+      };
+
+      const targetTime = new Date(Date.now() + offsetMs);
+      const year = targetTime.getFullYear();
+      const month = targetTime.getMonth() + 1;
+      const date = targetTime.getDate();
+      const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
+      const day = dayNames[targetTime.getDay()];
+
+      const timeStr = `${pad(targetTime.getHours())}:${pad(targetTime.getMinutes())}:${pad(targetTime.getSeconds())}`;
+
+      const itemInfo = (() => {
+        if (!activeOutputKey) return null;
+        const { type, id } = activeOutputKey;
+
+        if (type === "cd") {
+          const item = cdTargets.find(t => t.id === id);
+          if (!item) return null;
+          const remaining = item.target - Date.now() - (cdSteal > 0 ? cdSteal * 1000 : 0);
+          const isPast = remaining <= 0;
+          const displayMs = isPast ? Math.abs(remaining) : roundUpToSecond(remaining);
+          return {
+            display: (isPast ? "+" : "") + formatTime(displayMs),
+            color: isPast ? colors.red : (remaining > 0 && remaining < 60000) ? colors.amber : colors.white,
+            label: item.label || "カウントダウン",
+            subLabel: `目標 ${new Date(item.target).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}`
+          };
+        }
+
+        if (type === "tm") {
+          const timer = timers.find(t => t.id === id);
+          if (!timer) return null;
+          const baseRemaining = timer.running ? Math.max(0, timer.endAt - Date.now()) : timer.remaining;
+          const offsetRemaining = tmSteal > 0 ? Math.max(0, baseRemaining - tmSteal * 1000) : baseRemaining;
+          const displayMs = timer.done ? 0 : roundUpToSecond(offsetRemaining);
+          const isNear = baseRemaining < 10000 && baseRemaining > 0 && timer.running;
+          const elapsedTime = Math.max(0, timer.totalMs - baseRemaining);
+
+          return {
+            display: timer.done ? "完了" : formatTime(displayMs),
+            color: timer.done ? colors.green : timer.running ? (isNear ? colors.amber : colors.blue) : colors.mutedLight,
+            label: timer.label || "タイマー",
+            subLabel: `設定: ${formatTime(timer.totalMs)} / 経過: ${formatTime(elapsedTime)}`
+          };
+        }
+
+        if (type === "sw") {
+          const stopwatchTotal = swState.accumulated;
+          const stopwatchStart = swState.startedAt;
+          const currentMs = swState.running ? stopwatchTotal + (Date.now() - stopwatchStart) : stopwatchTotal;
+          return {
+            display: currentMs < 60000 ? formatTimeMs(currentMs) : formatTime(currentMs),
+            color: swState.running ? colors.green : colors.amber,
+            label: "ストップウォッチ",
+            subLabel: `LAP数: ${swState.laps.length}`
+          };
+        }
+
+        return null;
+      })();
+
+      return (
+        <div 
+          onClick={handleTap}
+          className="fixed inset-0 z-[600] bg-[#020207] flex flex-col justify-between p-[4vh_6vw] text-center select-none cursor-pointer overflow-hidden animate-none"
+          style={{ height: '100vh', width: '100vw' }}
+        >
+          <div className="text-[12px] sm:text-[14px] md:text-[16px] font-sans font-bold text-mutedLight tracking-[5px] opacity-80 select-none shrink-0">
+            {year}年 {month}月 {date}日 ({day}曜日)
+          </div>
+
+          {!itemInfo ? (
+            <div className="flex-1 flex flex-col justify-center items-center px-4">
+              <div 
+                className="font-mono font-bold leading-none text-[19vw] sm:text-[19vw] md:text-[19vw] tracking-normal text-white select-none whitespace-nowrap"
+                style={{ 
+                  textShadow: '0 0 50px rgba(220, 224, 248, 0.35), 0 0 15px rgba(220, 224, 248, 0.15)',
+                  fontVariantNumeric: 'tabular-nums'
+                }}
+              >
+                {timeStr}
+              </div>
+              <div className="text-[10px] text-mutedCustom tracking-[3px] mt-8 opacity-35 uppercase font-sans">
+                ダブルタップで通常モードに戻る
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="flex-[1.2] flex flex-col justify-center items-center py-2">
+                <div 
+                  className="font-mono font-bold leading-none text-[8.5vw] md:text-[9vw] tracking-normal text-white"
+                  style={{ 
+                    textShadow: '0 0 20px rgba(220,224,248,0.25)',
+                    fontVariantNumeric: 'tabular-nums'
+                  }}
+                >
+                  {timeStr}
+                </div>
+                <div style={labelStyle} className="mt-1.5 opacity-40 text-[9px] tracking-[2px]">現在時刻</div>
+              </div>
+
+              <div className="flex-[1.5] flex flex-col justify-center items-center border-t border-border/20 pt-3 pb-1">
+                <div className="font-sans text-[13px] sm:text-[15px] md:text-[17px] font-bold text-mutedLight mb-2 tracking-[1px] flex items-baseline gap-2">
+                  <span className="text-amberCustom text-[11px] animate-pulse">✦</span> {itemInfo.label}
+                  {itemInfo.subLabel && (
+                    <span className="text-[10px] sm:text-[11px] text-mutedCustom font-normal">
+                      ({itemInfo.subLabel})
+                    </span>
+                  )}
+                </div>
+                <div 
+                  className="font-mono font-bold leading-none text-[13.5vw] md:text-[14vw] tracking-tight"
+                  style={{ 
+                    color: itemInfo.color,
+                    textShadow: `0 0 35px ${itemInfo.color}33`,
+                    fontVariantNumeric: 'tabular-nums'
+                  }}
+                >
+                  {itemInfo.display}
+                </div>
+              </div>
+
+              <div className="text-[9px] text-mutedCustom tracking-[2px] opacity-35 shrink-0">
+                ダブルタップで通常モードに戻る
+              </div>
+            </>
+          )}
         </div>
       );
     }
@@ -2606,8 +2739,7 @@
       const [cdSteal, setCdSteal] = useState(0);
       const [tmSteal, setTmSteal] = useState(0);
       const [activeOutputKey, setActiveOutputKey] = useState(null);
-
-      // ポップアップ警告用モーダル状態
+      const [isLandscape, setIsLandscape] = useState(false);
       const [showBlockAlert, setShowBlockAlert] = useState(false);
 
       const tabItems = [
@@ -2619,7 +2751,6 @@
 
       return (
         <div className="h-[100vh] bg-bg text-white font-sans max-w-[430px] mx-auto flex flex-col overflow-hidden select-none">
-          {/* ヘッダーナビゲーション */}
           <div className="flex justify-between items-center p-2 border-b border-border bg-bg shrink-0 z-50">
             <div className="flex gap-1">
               {tabItems.map(tab => {
@@ -2643,10 +2774,13 @@
               })}
             </div>
             
-            <HeaderClock offsetMs={timeOffset} setOffsetMs={setTimeOffset} />
+            <HeaderClock 
+              offsetMs={timeOffset} 
+              setOffsetMs={setTimeOffset} 
+              onDoubleTap={() => setIsLandscape(true)} 
+            />
           </div>
 
-          {/* タブコンテンツ */}
           <div className="flex-1 min-h-0 overflow-hidden flex flex-col" style={{ display: currentTab === "cd" ? "flex" : "none" }}>
             <CountdownManager
               targets={countdownTargets}
@@ -2682,7 +2816,6 @@
             <CalculatorManager setClipboardVal={setClipboardValue} />
           </div>
 
-          {/* フローティング小窓 */}
           {activeOutputKey && (
             <FloatingOutput
               sourceKey={activeOutputKey}
@@ -2696,7 +2829,19 @@
             />
           )}
 
-          {/* ポップアップブロック警告用サイバーパンク風モーダル */}
+          {isLandscape && (
+            <LandscapeView
+              offsetMs={timeOffset}
+              activeOutputKey={activeOutputKey}
+              cdTargets={countdownTargets}
+              timers={timers}
+              swState={stopwatchState}
+              cdSteal={cdSteal}
+              tmSteal={tmSteal}
+              onClose={() => setIsLandscape(false)}
+            />
+          )}
+
           {showBlockAlert && (
             <div 
               className="fixed inset-0 z-[500] bg-black/90 backdrop-blur-[6px] flex items-center justify-center p-5"
