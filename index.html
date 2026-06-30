@@ -414,9 +414,9 @@
       );
     }
 
-    // 時刻手動設定ダイアログ付き現在時刻・オフセット時計 (競合のない安全なダブルタップ ＆ 長押し両立構造)
+    // 時刻手動設定ダイアログ付き現在時刻・オフセット時計 (ミリ秒遅延のない高精度requestAnimationFrame同期版)
     function HeaderClock({ offsetMs, setOffsetMs, onDoubleTap }) {
-      const [, setTick] = useState(0);
+      const [nowTime, setNowTime] = useState(Date.now());
       const [showModal, setShowModal] = useState(false);
       const [inputValue, setInputValue] = useState("");
       
@@ -424,37 +424,26 @@
       const isLongPressed = useRef(false);
       const lastTap = useRef(0);
 
+      // 時計のレンダリング周期をブラウザの描画同期(60FPS以上)に直結し、遅延を完全ゼロに
       useEffect(() => {
-        let interval;
-        const updateClock = () => {
-          if (!document.hidden) {
-            setTick(prev => prev + 1);
-          }
+        let active = true;
+        const updateLoop = () => {
+          if (!active) return;
+          setNowTime(Date.now());
+          timerRef.current = requestAnimationFrame(updateLoop);
         };
-        interval = setInterval(updateClock, 200);
-
-        const onVisibilityChange = () => {
-          if (document.hidden) {
-            clearInterval(interval);
-          } else {
-            clearInterval(interval);
-            interval = setInterval(updateClock, 200);
-          }
-        };
-
-        document.addEventListener("visibilitychange", onVisibilityChange);
+        timerRef.current = requestAnimationFrame(updateLoop);
+        
         return () => {
-          clearInterval(interval);
-          document.removeEventListener("visibilitychange", onVisibilityChange);
+          active = false;
+          if (timerRef.current) cancelAnimationFrame(timerRef.current);
         };
       }, []);
 
-      const targetTime = new Date(Date.now() + offsetMs);
+      const targetTime = new Date(nowTime + offsetMs);
 
       const handlePointerDown = (e) => {
         isLongPressed.current = false;
-        if (timerRef.current) clearTimeout(timerRef.current);
-        
         timerRef.current = setTimeout(() => {
           isLongPressed.current = true;
           setInputValue(`${pad(targetTime.getHours())}${pad(targetTime.getMinutes())}${pad(targetTime.getSeconds())}`);
@@ -466,9 +455,10 @@
       };
 
       const handlePointerUp = (e) => {
-        if (timerRef.current) clearTimeout(timerRef.current);
+        if (timerRef.current && isLongPressed.current === false) {
+          clearTimeout(timerRef.current);
+        }
         
-        // すでに長押し(600ms)が成立した後は、指を離した時のタップ処理をスキップ
         if (isLongPressed.current) {
           isLongPressed.current = false;
           return;
@@ -485,16 +475,18 @@
 
       const handlePointerLeave = () => {
         if (timerRef.current) clearTimeout(timerRef.current);
+        isLongPressed.current = false;
       };
 
       const saveManualTime = () => {
         const parsed = parseInputDigits(inputValue);
         if (!parsed) return;
-        const now = new Date();
+        const now = Date.now();
         const targetDate = new Date(now);
         targetDate.setHours(parsed.h, parsed.m, parsed.s, 0);
         setOffsetMs(targetDate.getTime() - now.getTime());
         setShowModal(false);
+        isLongPressed.current = false;
       };
 
       return (
@@ -503,7 +495,7 @@
             onPointerDown={handlePointerDown}
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerLeave}
-            className="text-right cursor-pointer select-none leading-[1.2]"
+            className="text-right cursor-pointer select-none leading-[1.2] active:opacity-70"
           >
             <div 
               className="font-mono text-[27px] tracking-[1px] flex items-center justify-end"
@@ -520,7 +512,7 @@
           {showModal && (
             <div
               className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-[6px] flex items-center justify-center p-5"
-              onClick={() => setShowModal(false)}
+              onClick={() => { setShowModal(false); isLongPressed.current = false; }}
             >
               <div
                 className="bg-card border border-border rounded-[20px] p-[22px] w-full max-w-[320px]"
@@ -548,14 +540,14 @@
                   </button>
                   {offsetMs !== 0 && (
                     <button
-                      onClick={() => { setOffsetMs(0); setShowModal(false); }}
+                      onClick={() => { setOffsetMs(0); setShowModal(false); isLongPressed.current = false; }}
                       className="flex-[1] py-3 bg-surface border border-border rounded-[10px] text-mutedCustom text-xs font-sans cursor-pointer"
                     >
                       RST
                     </button>
                   )}
                   <button
-                    onClick={() => setShowModal(false)}
+                    onClick={() => { setShowModal(false); isLongPressed.current = false; }}
                     className="flex-[1] py-3 bg-surface border border-border rounded-[10px] text-mutedCustom text-xs font-sans cursor-pointer"
                   >
                     ✕
@@ -603,7 +595,7 @@
       );
     }
 
-    // カウントダウンアイテムコンポーネント (SortableJS適用・スワイプアクション拡張仕様)
+    // カウントダウンアイテムコンポーネント
     function CountdownItem({ item, onDelete, onMoveUp, onMoveDown, isFirst, isLast, steal, onOpenOutput, onEditLabel }) {
       const diffMs = item.target - Date.now() - (steal > 0 ? steal * 1000 : 0);
       const isPast = diffMs <= 0;
@@ -1539,7 +1531,7 @@
             {timers.length === 0 ? (
               <div className="text-center py-[22px] text-mutedCustom font-sans text-xs border border-dashed border-border rounded-xl no-drag">
                 ⏳ タイマーを追加<br />
-                <span className="text-[10px] opacity-50">複数同時起動・▲▼で並び替え可・ダブルタップで小窓化</span>
+                <span className="text-[10px] opacity-50">複数同時起動・▲▼タップで並び替え・ダブルタップで小窓化</span>
               </div>
             ) : (
               timers.map((t, idx) => (
@@ -1694,7 +1686,6 @@
           setSwState(prev => ({ ...prev, running: false, accumulated: finalElapsed, startedAt: null }));
         } else {
           const now = Date.now();
-          startedAtRef.current = now;
           startedAtRef.current = now;
           setSwState(prev => ({ ...prev, running: true, startedAt: now }));
         }
@@ -2563,24 +2554,27 @@
       );
     }
 
-    // 横画面ビューコンポーネント (微細なサイズ調整、はみ出しを防ぎ完璧に収めるチューニング版)
+    // 横画面ビューコンポーネント (装飾LEDを完全廃止し、ミリ秒同期の置時計画面として調整)
     function LandscapeView({ offsetMs, activeOutputKey, cdTargets, timers, swState, cdSteal, tmSteal, onClose }) {
-      const [, setTick] = useState(0);
+      const [nowTime, setNowTime] = useState(Date.now());
       const lastTap = useRef(0);
+      const timerRef = useRef(null);
 
-      const getFpsMode = () => {
-        if (!activeOutputKey) return "low";
-        if (activeOutputKey.type === "sw") {
-          return swState.running ? "high" : "low";
-        }
-        if (activeOutputKey.type === "tm") {
-          const timer = timers.find(t => t.id === activeOutputKey.id);
-          return (timer && timer.running) ? "low" : "low";
-        }
-        return "low";
-      };
-
-      useLowPowerTrigger(getFpsMode());
+      // 横画面モードの現在時刻表示をシステム垂直同期(秒間60回)で高速更新し、一切の遅延・秒飛びを排除
+      useEffect(() => {
+        let active = true;
+        const updateLoop = () => {
+          if (!active) return;
+          setNowTime(Date.now());
+          timerRef.current = requestAnimationFrame(updateLoop);
+        };
+        timerRef.current = requestAnimationFrame(updateLoop);
+        
+        return () => {
+          active = false;
+          if (timerRef.current) cancelAnimationFrame(timerRef.current);
+        };
+      }, []);
 
       const handleTap = () => {
         const now = Date.now();
@@ -2592,7 +2586,7 @@
         }
       };
 
-      const targetTime = new Date(Date.now() + offsetMs);
+      const targetTime = new Date(nowTime + offsetMs);
       const year = targetTime.getFullYear();
       const month = targetTime.getMonth() + 1;
       const date = targetTime.getDate();
@@ -2657,14 +2651,16 @@
           className="fixed inset-0 z-[600] bg-[#020207] flex flex-col justify-between p-[4vh_6vw] text-center select-none cursor-pointer overflow-hidden animate-none"
           style={{ height: '100vh', width: '100vw' }}
         >
-          <div className="text-[12px] sm:text-[14px] md:text-[16px] font-sans font-bold text-mutedLight tracking-[5px] opacity-80 select-none shrink-0">
+          {/* 最上段：小さめに年、月、日、曜日 */}
+          <div className="text-[12px] sm:text-[14px] md:text-[16px] font-sans font-bold text-mutedLight tracking-[5px] opacity-80 select-none shrink-0 z-10">
             {year}年 {month}月 {date}日 ({day}曜日)
           </div>
 
           {!itemInfo ? (
-            <div className="flex-1 flex flex-col justify-center items-center px-4">
+            // 別ウィンドウなし：余計な装飾のないクリアで超巨大な現在時刻表示（置時計）
+            <div className="flex-1 flex flex-col justify-center items-center px-4 relative w-full h-full">
               <div 
-                className="font-mono font-bold leading-none text-[19vw] sm:text-[19vw] md:text-[19vw] tracking-normal text-white select-none whitespace-nowrap"
+                className="font-mono font-bold leading-none text-[19vw] sm:text-[19vw] md:text-[19vw] tracking-normal text-white select-none whitespace-nowrap z-20"
                 style={{ 
                   textShadow: '0 0 50px rgba(220, 224, 248, 0.35), 0 0 15px rgba(220, 224, 248, 0.15)',
                   fontVariantNumeric: 'tabular-nums'
@@ -2672,13 +2668,14 @@
               >
                 {timeStr}
               </div>
-              <div className="text-[10px] text-mutedCustom tracking-[3px] mt-8 opacity-35 uppercase font-sans">
+              <div className="text-[10px] text-mutedCustom tracking-[3px] mt-8 opacity-35 uppercase font-sans z-20">
                 ダブルタップで通常モードに戻る
               </div>
             </div>
           ) : (
+            // 別ウィンドウ表示あり
             <>
-              <div className="flex-[1.2] flex flex-col justify-center items-center py-2">
+              <div className="flex-[1.2] flex flex-col justify-center items-center py-2 relative">
                 <div 
                   className="font-mono font-bold leading-none text-[8.5vw] md:text-[9vw] tracking-normal text-white"
                   style={{ 
@@ -2712,7 +2709,7 @@
                 </div>
               </div>
 
-              <div className="text-[9px] text-mutedCustom tracking-[2px] opacity-35 shrink-0">
+              <div className="text-[9px] text-mutedCustom tracking-[2px] opacity-35 shrink-0 z-10">
                 ダブルタップで通常モードに戻る
               </div>
             </>
