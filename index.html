@@ -1009,7 +1009,7 @@
       );
     }
 
-    // タイマーアイテムコンポーネント (省電力200msループ駆動 ＆ GPU線形アニメーション補完)
+    // タイマーアイテムコンポーネント (省電力200msループ駆動 & 左右双方向スワイプ対応)
     function TimerItem({ timer, onUpdate, onDelete, onMoveUp, onMoveDown, isFirst, isLast, steal, onOpenOutput, onEditLabel }) {
       // 200ms間隔の省電力更新。タイマーが止まっている時はループ遮断
       useLowPowerTrigger(timer.running ? "low" : "none");
@@ -1018,9 +1018,10 @@
       const [isSwiping, setIsSwiping] = useState(false);
 
       const startX = useRef(0);
-      const isSwipedOpen = useRef(false);
+      const swipeState = useRef('closed'); // 'closed', 'left' (スワイプ中含む左開き), 'right' (右開き)
       const lastTapTime = useRef(0);
-      const swipeLimit = 156; // 78px * 2つのボタン分に拡張
+      const swipeLimitLeft = 156;  // 左スワイプ（ラベル、削除ボタン：78px * 2）
+      const swipeLimitRight = 120; // 右スワイプ（経過時間表示幅：120px）
 
       const deltaMs = timer.running ? timer.endAt - Date.now() : timer.remaining;
       const isOver = deltaMs < 0 && timer.running;
@@ -1031,6 +1032,9 @@
       const currentColor = isOver ? colors.red : timer.done ? colors.green : isNearEnd ? colors.amber : colors.blue;
       const displayMs = timer.done ? 0 : isOver ? deltaMs : roundUpToSecond(Math.max(0, offsetMs));
 
+      // 経過した時間（カウントアップ）
+      const elapsedTime = Math.max(0, timer.totalMs - deltaMs);
+
       const handleTouchStart = (e) => {
         if (e.target.closest('.no-drag')) return;
         startX.current = e.touches[0].clientX;
@@ -1040,27 +1044,38 @@
       const handleTouchMove = (e) => {
         if (!isSwiping) return;
         const deltaX = e.touches[0].clientX - startX.current;
-        let tx = (isSwipedOpen.current ? -swipeLimit : 0) + deltaX;
-        tx = Math.max(-swipeLimit, Math.min(0, tx));
+        let currentOffset = 0;
+        if (swipeState.current === 'left') {
+          currentOffset = -swipeLimitLeft;
+        } else if (swipeState.current === 'right') {
+          currentOffset = swipeLimitRight;
+        }
+        
+        let tx = currentOffset + deltaX;
+        // 左右の最大可動幅を制限
+        tx = Math.max(-swipeLimitLeft, Math.min(swipeLimitRight, tx));
         setTranslateX(tx);
       };
 
       const handleTouchEnd = () => {
         setIsSwiping(false);
-        if (translateX < -swipeLimit * 0.45) {
-          setTranslateX(-swipeLimit);
-          isSwipedOpen.current = true;
+        if (translateX < -swipeLimitLeft * 0.45) {
+          setTranslateX(-swipeLimitLeft);
+          swipeState.current = 'left';
+        } else if (translateX > swipeLimitRight * 0.45) {
+          setTranslateX(swipeLimitRight);
+          swipeState.current = 'right';
         } else {
           setTranslateX(0);
-          isSwipedOpen.current = false;
+          swipeState.current = 'closed';
         }
       };
 
       const handleTapAction = (e) => {
         if (e.target.closest('.no-drag')) return;
-        if (isSwipedOpen.current) {
+        if (swipeState.current !== 'closed') {
           setTranslateX(0);
-          isSwipedOpen.current = false;
+          swipeState.current = 'closed';
           return;
         }
         const now = Date.now();
@@ -1079,13 +1094,35 @@
 
       return (
         <div data-id={timer.id} className="relative overflow-hidden rounded-xl mb-[6px]" style={{ height: '110px' }}>
+          
+          {/* 右スワイプで出現するアクション裏レイヤー (経過した時間を表示) */}
+          <div 
+            className="absolute inset-y-0 left-0 flex items-center justify-center bg-blueGlow border-r border-blueCustom/20 no-drag rounded-l-xl transition-opacity duration-150"
+            style={{ 
+              width: `${swipeLimitRight}px`,
+              opacity: translateX > 0 ? Math.min(1, translateX / swipeLimitRight) : 0
+            }}
+          >
+            <div className="text-center p-2">
+              <div style={{ ...labelStyle, fontSize: 8, color: colors.blue, marginBottom: 2 }}>経過時間</div>
+              <div className="font-mono text-[22px] font-extrabold text-blueCustom leading-none">
+                {formatTime(elapsedTime)}
+              </div>
+            </div>
+          </div>
+
           {/* 左スワイプで出現するアクション裏レイヤー (ラベルボタン & 削除ボタン) */}
-          <div className="absolute inset-y-0 right-0 w-[156px] flex no-drag">
+          <div 
+            className="absolute inset-y-0 right-0 w-[156px] flex no-drag transition-opacity duration-150"
+            style={{
+              opacity: translateX < 0 ? Math.min(1, Math.abs(translateX) / swipeLimitLeft) : 0
+            }}
+          >
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 setTranslateX(0);
-                isSwipedOpen.current = false;
+                swipeState.current = 'closed';
                 onEditLabel(timer.id, timer.label || "");
               }}
               className="flex-1 border-none bg-blueCustom text-white font-sans text-xs font-bold cursor-pointer active:brightness-90"
@@ -1103,6 +1140,7 @@
             </button>
           </div>
 
+          {/* スライド本体カード */}
           <div
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
@@ -1467,7 +1505,7 @@
                   onChange={(e) => { setCustomInput(e.target.value.replace(/\D/g, "").slice(0, 6)); setSelectedPresetMs(0); }}
                   onKeyDown={(e) => e.key === "Enter" && createTimer()}
                   placeholder="設定値を入力"
-                  className="bg-bg border border-border rounded-lg p-[8px_64px_8px_12px] text-blueCustom text-15 font-mono tracking-[1.5px] outline-none w-full box-border placeholder:text-mutedCustom/70 placeholder:text-sm placeholder:tracking-normal"
+                  className="bg-bg border border-border rounded-lg p-[8px_64px_8px_12px] text-blueCustom text-15 font-mono tracking-[1px] outline-none w-full box-border placeholder:text-mutedCustom/70 placeholder:text-sm placeholder:tracking-normal"
                 />
                 {parsedCustom && (
                   <div className="absolute right-3 top-1/2 -translate-y-1/2 font-mono text-[10px] text-blueCustom opacity-50 pointer-events-none animate-none">
