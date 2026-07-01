@@ -414,37 +414,48 @@
       );
     }
 
-    // 時刻手動設定ダイアログ付き現在時刻・オフセット時計 (ミリ秒遅延のない高精度requestAnimationFrame同期版)
+    // 時刻手動設定ダイアログ付き現在時刻・オフセット時計 (長押し独立検知 Ref 制御版)
     function HeaderClock({ offsetMs, setOffsetMs, onDoubleTap }) {
       const [nowTime, setNowTime] = useState(Date.now());
       const [showModal, setShowModal] = useState(false);
       const [inputValue, setInputValue] = useState("");
       
-      const timerRef = useRef(null);
+      const animFrameRef = useRef(null); // アニメーション同期ループ専用
+      const longPressTimerRef = useRef(null); // 長押しsetTimeout専用
       const isLongPressed = useRef(false);
       const lastTap = useRef(0);
 
-      // 時計のレンダリング周期をブラウザの描画同期(60FPS以上)に直結し、遅延を完全ゼロに
+      // 高精度1ミリ秒ラグなし同期描画
       useEffect(() => {
         let active = true;
         const updateLoop = () => {
           if (!active) return;
           setNowTime(Date.now());
-          timerRef.current = requestAnimationFrame(updateLoop);
+          animFrameRef.current = requestAnimationFrame(updateLoop);
         };
-        timerRef.current = requestAnimationFrame(updateLoop);
+        animFrameRef.current = requestAnimationFrame(updateLoop);
         
         return () => {
           active = false;
-          if (timerRef.current) cancelAnimationFrame(timerRef.current);
+          if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
         };
       }, []);
 
       const targetTime = new Date(nowTime + offsetMs);
 
       const handlePointerDown = (e) => {
+        // 横画面から戻った直後のガード期間内であれば処理を完全にスルー
+        if (window.blockHeaderClockUntil && Date.now() < window.blockHeaderClockUntil) {
+          return;
+        }
+
         isLongPressed.current = false;
-        timerRef.current = setTimeout(() => {
+        if (longPressTimerRef.current) {
+          clearTimeout(longPressTimerRef.current);
+        }
+        
+        // 独立した長押し判定タイマー。これで秒同期のループIDと混同して勝手に開くことが無くなります
+        longPressTimerRef.current = setTimeout(() => {
           isLongPressed.current = true;
           setInputValue(`${pad(targetTime.getHours())}${pad(targetTime.getMinutes())}${pad(targetTime.getSeconds())}`);
           setShowModal(true);
@@ -455,10 +466,18 @@
       };
 
       const handlePointerUp = (e) => {
-        if (timerRef.current && isLongPressed.current === false) {
-          clearTimeout(timerRef.current);
+        // 指やマウスが離れたら長押し用のタイマーを確実に即時クリア
+        if (longPressTimerRef.current) {
+          clearTimeout(longPressTimerRef.current);
+          longPressTimerRef.current = null;
         }
         
+        if (window.blockHeaderClockUntil && Date.now() < window.blockHeaderClockUntil) {
+          isLongPressed.current = false;
+          return;
+        }
+
+        // 長押しが成立した場合は通常のタップ/ダブルタップ判定に進まない
         if (isLongPressed.current) {
           isLongPressed.current = false;
           return;
@@ -474,7 +493,10 @@
       };
 
       const handlePointerLeave = () => {
-        if (timerRef.current) clearTimeout(timerRef.current);
+        if (longPressTimerRef.current) {
+          clearTimeout(longPressTimerRef.current);
+          longPressTimerRef.current = null;
+        }
         isLongPressed.current = false;
       };
 
@@ -595,7 +617,7 @@
       );
     }
 
-    // カウントダウンアイテムコンポーネント
+    // カウントダウンアイテムコンポーネント (PC/スマホ両用 PointerEvents & SortableJS共存設計)
     function CountdownItem({ item, onDelete, onMoveUp, onMoveDown, isFirst, isLast, steal, onOpenOutput, onEditLabel }) {
       const diffMs = item.target - Date.now() - (steal > 0 ? steal * 1000 : 0);
       const isPast = diffMs <= 0;
@@ -611,22 +633,27 @@
       const lastTapTime = useRef(0);
       const swipeLimit = 156;
 
-      const handleTouchStart = (e) => {
+      const handlePointerDown = (e) => {
         if (e.target.closest('.no-drag')) return;
-        startX.current = e.touches[0].clientX;
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        startX.current = e.clientX;
         setIsSwiping(true);
+        e.currentTarget.setPointerCapture(e.pointerId);
       };
 
-      const handleTouchMove = (e) => {
+      const handlePointerMove = (e) => {
         if (!isSwiping) return;
-        const deltaX = e.touches[0].clientX - startX.current;
+        const deltaX = e.clientX - startX.current;
         let tx = (isSwipedOpen.current ? -swipeLimit : 0) + deltaX;
         tx = Math.max(-swipeLimit, Math.min(0, tx));
         setTranslateX(tx);
       };
 
-      const handleTouchEnd = () => {
+      const handlePointerUp = (e) => {
+        if (!isSwiping) return;
         setIsSwiping(false);
+        try { e.currentTarget.releasePointerCapture(e.pointerId); } catch(_) {}
+        
         if (translateX < -swipeLimit * 0.45) {
           setTranslateX(-swipeLimit);
           isSwipedOpen.current = true;
@@ -634,6 +661,13 @@
           setTranslateX(0);
           isSwipedOpen.current = false;
         }
+      };
+
+      const handlePointerCancel = (e) => {
+        if (!isSwiping) return;
+        setIsSwiping(false);
+        try { e.currentTarget.releasePointerCapture(e.pointerId); } catch(_) {}
+        setTranslateX(isSwipedOpen.current ? -swipeLimit : 0);
       };
 
       const handleTapAction = (e) => {
@@ -682,9 +716,11 @@
           </div>
 
           <div
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerCancel}
+            onDragStart={(e) => e.preventDefault()}
             onClick={handleTapAction}
             className="relative bg-card border rounded-xl p-[9px_10px] flex items-center gap-2 select-none h-full transition-[border-color,box-shadow,transform] cursor-grab active:cursor-grabbing"
             style={{
@@ -1018,7 +1054,7 @@
       );
     }
 
-    // タイマーアイテムコンポーネント (省電力200msループ駆動 & 左右双方向スワイプ対応)
+    // タイマーアイテムコンポーネント (PC/スマホ両用 PointerEvents & 左右双方向スライド設計)
     function TimerItem({ timer, onUpdate, onDelete, onMoveUp, onMoveDown, isFirst, isLast, steal, onOpenOutput, onEditLabel }) {
       useLowPowerTrigger(timer.running ? "low" : "none");
 
@@ -1042,15 +1078,17 @@
 
       const elapsedTime = Math.max(0, timer.totalMs - deltaMs);
 
-      const handleTouchStart = (e) => {
+      const handlePointerDown = (e) => {
         if (e.target.closest('.no-drag')) return;
-        startX.current = e.touches[0].clientX;
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        startX.current = e.clientX;
         setIsSwiping(true);
+        e.currentTarget.setPointerCapture(e.pointerId);
       };
 
-      const handleTouchMove = (e) => {
+      const handlePointerMove = (e) => {
         if (!isSwiping) return;
-        const deltaX = e.touches[0].clientX - startX.current;
+        const deltaX = e.clientX - startX.current;
         let currentOffset = 0;
         if (swipeState.current === 'left') {
           currentOffset = -swipeLimitLeft;
@@ -1063,8 +1101,11 @@
         setTranslateX(tx);
       };
 
-      const handleTouchEnd = () => {
+      const handlePointerUp = (e) => {
+        if (!isSwiping) return;
         setIsSwiping(false);
+        try { e.currentTarget.releasePointerCapture(e.pointerId); } catch(_) {}
+        
         if (translateX < -swipeLimitLeft * 0.45) {
           setTranslateX(-swipeLimitLeft);
           swipeState.current = 'left';
@@ -1075,6 +1116,16 @@
           setTranslateX(0);
           swipeState.current = 'closed';
         }
+      };
+
+      const handlePointerCancel = (e) => {
+        if (!isSwiping) return;
+        setIsSwiping(false);
+        try { e.currentTarget.releasePointerCapture(e.pointerId); } catch(_) {}
+        let orig = 0;
+        if (swipeState.current === 'left') orig = -swipeLimitLeft;
+        if (swipeState.current === 'right') orig = swipeLimitRight;
+        setTranslateX(orig);
       };
 
       const handleTapAction = (e) => {
@@ -1100,6 +1151,8 @@
 
       return (
         <div data-id={timer.id} className="relative overflow-hidden rounded-xl mb-[6px]" style={{ height: '110px' }}>
+          
+          {/* 右スワイプ裏レイヤー: 経過した時間 */}
           <div 
             className="absolute inset-y-0 left-0 flex items-center justify-center bg-blueGlow border-r border-blueCustom/20 no-drag rounded-l-xl transition-opacity duration-150"
             style={{ 
@@ -1115,6 +1168,7 @@
             </div>
           </div>
 
+          {/* 左スワイプ裏レイヤー: 編集と削除 */}
           <div 
             className="absolute inset-y-0 right-0 w-[156px] flex no-drag transition-opacity duration-150"
             style={{
@@ -1143,10 +1197,13 @@
             </button>
           </div>
 
+          {/* スライドカード本体 */}
           <div
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerCancel}
+            onDragStart={(e) => e.preventDefault()}
             onClick={handleTapAction}
             className="relative bg-card border rounded-xl p-[10px_12px_0] select-none h-full transition-[border-color,box-shadow,transform] cursor-grab active:cursor-grabbing"
             style={{
@@ -2404,7 +2461,7 @@
         const dy = e.clientY - resizeStartMetrics.current.y;
         setSize({
           w: Math.max(minW, Math.min(maxW, resizeStartMetrics.current.w + dx)),
-          h: Math.max(minH, Math.min(maxH, resizeStartMetrics.current.h + dy))
+          h: Math.max(minH, Math.min(maxH, resizeStartMetrics.current.h + dy)),
         });
       };
 
@@ -2554,13 +2611,12 @@
       );
     }
 
-    // 横画面ビューコンポーネント (装飾LEDを完全廃止し、ミリ秒同期の置時計画面として調整)
+    // 横画面ビューコンポーネント
     function LandscapeView({ offsetMs, activeOutputKey, cdTargets, timers, swState, cdSteal, tmSteal, onClose }) {
       const [nowTime, setNowTime] = useState(Date.now());
       const lastTap = useRef(0);
       const timerRef = useRef(null);
 
-      // 横画面モードの現在時刻表示をシステム垂直同期(秒間60回)で高速更新し、一切の遅延・秒飛びを排除
       useEffect(() => {
         let active = true;
         const updateLoop = () => {
@@ -2576,7 +2632,13 @@
         };
       }, []);
 
-      const handleTap = () => {
+      const handlePointerDown = (e) => {
+        e.stopPropagation();
+      };
+
+      const handlePointerUp = (e) => {
+        e.stopPropagation();
+        e.preventDefault();
         const now = Date.now();
         if (now - lastTap.current < 300) {
           onClose();
@@ -2647,17 +2709,17 @@
 
       return (
         <div 
-          onClick={handleTap}
+          onPointerDown={handlePointerDown}
+          onPointerUp={handlePointerUp}
           className="fixed inset-0 z-[600] bg-[#020207] flex flex-col justify-between p-[4vh_6vw] text-center select-none cursor-pointer overflow-hidden animate-none"
           style={{ height: '100vh', width: '100vw' }}
         >
-          {/* 最上段：小さめに年、月、日、曜日 */}
+          {/* 最上段 */}
           <div className="text-[12px] sm:text-[14px] md:text-[16px] font-sans font-bold text-mutedLight tracking-[5px] opacity-80 select-none shrink-0 z-10">
             {year}年 {month}月 {date}日 ({day}曜日)
           </div>
 
           {!itemInfo ? (
-            // 別ウィンドウなし：余計な装飾のないクリアで超巨大な現在時刻表示（置時計）
             <div className="flex-1 flex flex-col justify-center items-center px-4 relative w-full h-full">
               <div 
                 className="font-mono font-bold leading-none text-[19vw] sm:text-[19vw] md:text-[19vw] tracking-normal text-white select-none whitespace-nowrap z-20"
@@ -2673,7 +2735,6 @@
               </div>
             </div>
           ) : (
-            // 別ウィンドウ表示あり
             <>
               <div className="flex-[1.2] flex flex-col justify-center items-center py-2 relative">
                 <div 
@@ -2835,7 +2896,10 @@
               swState={stopwatchState}
               cdSteal={cdSteal}
               tmSteal={tmSteal}
-              onClose={() => setIsLandscape(false)}
+              onClose={() => {
+                setIsLandscape(false);
+                window.blockHeaderClockUntil = Date.now() + 500;
+              }}
             />
           )}
 
