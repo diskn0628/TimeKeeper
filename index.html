@@ -1,4 +1,3 @@
-```html
 <!doctype html>
 <html>
 <head>
@@ -14,7 +13,7 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-  <!-- SortableJS CDN (滑らかで安定したiPhoneライク並び替え用) -->
+  <!-- SortableJS CDN -->
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 
   <!-- Google Fonts -->
@@ -37,6 +36,9 @@
             greenCustom: '#28e07a',
             greenGlow: 'rgba(40,224,122,0.15)',
             blueCustom: '#60a8ff',
+            blueGlow: 'rgba(96,168,255,0.15)',
+            cyanCustom: '#00f0ff',
+            cyanGlow: 'rgba(0,240,255,0.15)',
             whiteCustom: '#dce0f8',
             grayCustom: '#44445a',
             mutedCustom: '#666688',
@@ -69,6 +71,11 @@
       position: absolute;
       inset: 0;
       height: 100%;
+      padding-top: env(safe-area-inset-top, 0px);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      padding-left: env(safe-area-inset-left, 0px);
+      padding-right: env(safe-area-inset-right, 0px);
+      box-sizing: border-box;
     }
     /* カスタムスクロールバー */
     ::-webkit-scrollbar {
@@ -83,7 +90,7 @@
       border-radius: 2px;
     }
 
-    /* SortableJS 長押しドラッグ時の琥珀ネオンプレビュー効果 */
+    /* SortableJS 長押しドラッグ時のプレビュー効果 */
     .sortable-ghost {
       opacity: 0.25;
       background-color: #0c0c16 !important;
@@ -91,7 +98,7 @@
     }
     .sortable-chosen {
       box-shadow: 0 15px 30px rgba(0, 0, 0, 0.85), 0 0 16px rgba(240,160,48,0.3) !important;
-      transform: scale(1.03);
+      transform: scale(1.02);
       background-color: rgba(240,160,48,0.12) !important;
       border-color: #f0a030 !important;
       z-index: 50;
@@ -120,6 +127,8 @@
       greenGlow: 'rgba(40,224,122,0.15)',
       blue: '#60a8ff',
       blueGlow: 'rgba(96,168,255,0.15)',
+      cyan: '#00f0ff',
+      cyanGlow: 'rgba(0,240,255,0.15)',
       white: '#dce0f8',
       gray: '#44445a',
       muted: '#666688',
@@ -414,18 +423,17 @@
       );
     }
 
-    // 時刻手動設定ダイアログ付き現在時刻・オフセット時計 (長押し独立検知 Ref 制御版)
-    function HeaderClock({ offsetMs, setOffsetMs, onDoubleTap }) {
+    // 時刻手動設定ダイアログ付き現在時刻・オフセット時計
+    function HeaderClock({ offsetMs, setOffsetMs, onDoubleTap, blockUntilRef }) {
       const [nowTime, setNowTime] = useState(Date.now());
       const [showModal, setShowModal] = useState(false);
       const [inputValue, setInputValue] = useState("");
       
-      const animFrameRef = useRef(null); // アニメーション同期ループ専用
-      const longPressTimerRef = useRef(null); // 長押しsetTimeout専用
+      const animFrameRef = useRef(null);
+      const longPressTimerRef = useRef(null);
       const isLongPressed = useRef(false);
       const lastTap = useRef(0);
 
-      // 高精度1ミリ秒ラグなし同期描画
       useEffect(() => {
         let active = true;
         const updateLoop = () => {
@@ -444,8 +452,7 @@
       const targetTime = new Date(nowTime + offsetMs);
 
       const handlePointerDown = (e) => {
-        // 横画面から戻った直後のガード期間内であれば処理を完全にスルー
-        if (window.blockHeaderClockUntil && Date.now() < window.blockHeaderClockUntil) {
+        if (blockUntilRef && Date.now() < blockUntilRef.current) {
           return;
         }
 
@@ -454,7 +461,6 @@
           clearTimeout(longPressTimerRef.current);
         }
         
-        // 独立した長押し判定タイマー。これで秒同期のループIDと混同して勝手に開くことが無くなります
         longPressTimerRef.current = setTimeout(() => {
           isLongPressed.current = true;
           setInputValue(`${pad(targetTime.getHours())}${pad(targetTime.getMinutes())}${pad(targetTime.getSeconds())}`);
@@ -466,18 +472,16 @@
       };
 
       const handlePointerUp = (e) => {
-        // 指やマウスが離れたら長押し用のタイマーを確実に即時クリア
         if (longPressTimerRef.current) {
           clearTimeout(longPressTimerRef.current);
           longPressTimerRef.current = null;
         }
         
-        if (window.blockHeaderClockUntil && Date.now() < window.blockHeaderClockUntil) {
+        if (blockUntilRef && Date.now() < blockUntilRef.current) {
           isLongPressed.current = false;
           return;
         }
 
-        // 長押しが成立した場合は通常のタップ/ダブルタップ判定に進まない
         if (isLongPressed.current) {
           isLongPressed.current = false;
           return;
@@ -609,16 +613,16 @@
           onPointerUp={handlePointerUp}
           onPointerLeave={() => clearTimeout(timerRef.current)}
           onContextMenu={(e) => e.preventDefault()}
-          className="px-3 py-1.2 bg-card border border-amberCustom rounded-[20px] text-amberCustom text-[11px] font-sans font-semibold cursor-pointer tracking-[0.5px] select-none no-drag animate-none"
+          className="px-3 py-1 bg-card border border-amberCustom rounded-[20px] text-amberCustom text-[11px] font-sans font-semibold cursor-pointer tracking-[0.5px] select-none no-drag animate-none"
         >
           {preset.label}
-          <span className="text-amberDim ml-1.2 text-[10px]">{preset.str}</span>
+          <span className="text-amberDim ml-1 text-[10px]">{preset.str}</span>
         </button>
       );
     }
 
-    // カウントダウンアイテムコンポーネント (PC/スマホ両用 PointerEvents & SortableJS共存設計)
-    function CountdownItem({ item, onDelete, onMoveUp, onMoveDown, isFirst, isLast, steal, onOpenOutput, onEditLabel }) {
+    // カウントダウンアイテムコンポーネント (PC/スマホ両対応・右スワイプ時も両方の数字が完全に見える分割連動UI)
+    function CountdownItem({ item, onDelete, onMoveUp, onMoveDown, isFirst, isLast, steal, onOpenOutput, onEditLabel, timers = [] }) {
       const diffMs = item.target - Date.now() - (steal > 0 ? steal * 1000 : 0);
       const isPast = diffMs <= 0;
       const isNear = diffMs > 0 && diffMs < 60000;
@@ -626,55 +630,82 @@
       const displayMs = isPast ? Math.abs(diffMs) : roundUpToSecond(diffMs);
 
       const [translateX, setTranslateX] = useState(0);
-      const [isSwiping, setIsSwiping] = useState(false);
-      
+      const isDraggingRef = useRef(false);
       const startX = useRef(0);
-      const isSwipedOpen = useRef(false);
+      const currentTx = useRef(0);
+      const swipeState = useRef('closed');
       const lastTapTime = useRef(0);
-      const swipeLimit = 156;
+      const hasMoved = useRef(false);
+      
+      // 稼働中のTMタイマー一覧
+      const runningTimers = timers.filter(t => t.running);
+      
+      // スワイプ上限: 右スワイプはカード幅の約45%（170px）に設定し、両方の数字が完全に画面内に収まるように設計
+      const swipeLimitLeft = 156;
+      const swipeLimitRight = 175;
 
       const handlePointerDown = (e) => {
         if (e.target.closest('.no-drag')) return;
         if (e.pointerType === 'mouse' && e.button !== 0) return;
         startX.current = e.clientX;
-        setIsSwiping(true);
-        e.currentTarget.setPointerCapture(e.pointerId);
+        isDraggingRef.current = true;
+        hasMoved.current = false;
+        
+        let initialOffset = 0;
+        if (swipeState.current === 'left') initialOffset = -swipeLimitLeft;
+        if (swipeState.current === 'right') initialOffset = swipeLimitRight;
+        currentTx.current = initialOffset;
+
+        try {
+          e.currentTarget.setPointerCapture(e.pointerId);
+        } catch (_) {}
       };
 
       const handlePointerMove = (e) => {
-        if (!isSwiping) return;
+        if (!isDraggingRef.current) return;
         const deltaX = e.clientX - startX.current;
-        let tx = (isSwipedOpen.current ? -swipeLimit : 0) + deltaX;
-        tx = Math.max(-swipeLimit, Math.min(0, tx));
-        setTranslateX(tx);
+        if (Math.abs(deltaX) > 4) {
+          hasMoved.current = true;
+        }
+        let nextTx = currentTx.current + deltaX;
+        nextTx = Math.max(-swipeLimitLeft, Math.min(swipeLimitRight, nextTx));
+        setTranslateX(nextTx);
       };
 
       const handlePointerUp = (e) => {
-        if (!isSwiping) return;
-        setIsSwiping(false);
+        if (!isDraggingRef.current) return;
+        isDraggingRef.current = false;
         try { e.currentTarget.releasePointerCapture(e.pointerId); } catch(_) {}
         
-        if (translateX < -swipeLimit * 0.45) {
-          setTranslateX(-swipeLimit);
-          isSwipedOpen.current = true;
+        if (translateX < -swipeLimitLeft * 0.4) {
+          setTranslateX(-swipeLimitLeft);
+          swipeState.current = 'left';
+        } else if (translateX > swipeLimitRight * 0.4) {
+          setTranslateX(swipeLimitRight);
+          swipeState.current = 'right';
         } else {
           setTranslateX(0);
-          isSwipedOpen.current = false;
+          swipeState.current = 'closed';
         }
       };
 
       const handlePointerCancel = (e) => {
-        if (!isSwiping) return;
-        setIsSwiping(false);
+        if (!isDraggingRef.current) return;
+        isDraggingRef.current = false;
         try { e.currentTarget.releasePointerCapture(e.pointerId); } catch(_) {}
-        setTranslateX(isSwipedOpen.current ? -swipeLimit : 0);
+        let orig = 0;
+        if (swipeState.current === 'left') orig = -swipeLimitLeft;
+        if (swipeState.current === 'right') orig = swipeLimitRight;
+        setTranslateX(orig);
       };
 
-      const handleTapAction = (e) => {
+      const handleCardClick = (e) => {
         if (e.target.closest('.no-drag')) return;
-        if (isSwipedOpen.current) {
+        if (hasMoved.current) return;
+
+        if (swipeState.current !== 'closed') {
           setTranslateX(0);
-          isSwipedOpen.current = false;
+          swipeState.current = 'closed';
           return;
         }
         const now = Date.now();
@@ -690,14 +721,89 @@
         hour: "2-digit", minute: "2-digit", second: "2-digit"
       });
 
+      const isRightSwiped = translateX > 20;
+
       return (
-        <div data-id={item.id} className="relative overflow-hidden rounded-xl mb-1.5" style={{ height: '74px' }}>
-          <div className="absolute inset-y-0 right-0 w-[156px] flex no-drag">
+        <div data-id={item.id} className="relative overflow-hidden rounded-xl mb-1.5 select-none" style={{ height: '78px' }}>
+          
+          {/* 右スワイプ裏レイヤー: 稼働中タイマー差し引き結果の表示 */}
+          <div 
+            className="absolute inset-y-0 left-0 flex flex-col justify-center bg-[#061424] border-r-2 border-cyanCustom/50 no-drag rounded-l-xl transition-opacity duration-150 px-3 z-0"
+            style={{ 
+              width: `${swipeLimitRight}px`,
+              opacity: translateX > 0 ? Math.min(1, translateX / 40) : 0
+            }}
+          >
+            {runningTimers.length === 0 ? (
+              <div>
+                <div style={{ ...labelStyle, fontSize: 8, color: colors.cyan, marginBottom: 1 }}>TMタイマー連携</div>
+                <div className="font-sans text-[11px] text-mutedLight">起動中タイマーなし</div>
+              </div>
+            ) : runningTimers.length === 1 ? (
+              (() => {
+                const tm = runningTimers[0];
+                const tmRemaining = Math.max(0, tm.endAt - Date.now());
+                const subDiff = diffMs - tmRemaining;
+                const isSubPast = subDiff <= 0;
+                const displaySubMs = isSubPast ? Math.abs(subDiff) : roundUpToSecond(subDiff);
+                const subColor = isSubPast ? colors.red : colors.cyan;
+
+                return (
+                  <div>
+                    <div className="flex items-center justify-between gap-1 mb-0.5">
+                      <span className="text-[9px] font-bold text-cyanCustom tracking-[1px] uppercase">TM終了後</span>
+                      <span className="font-sans text-[10px] text-mutedLight truncate max-w-[80px]">
+                        {tm.label || formatTime(tm.totalMs)}
+                      </span>
+                    </div>
+                    <div 
+                      className="font-mono text-[26px] font-extrabold leading-none tracking-tight"
+                      style={{ color: subColor, textShadow: `0 0 10px ${subColor}44` }}
+                    >
+                      {isSubPast ? "超 " : ""}{formatTime(displaySubMs)}
+                    </div>
+                  </div>
+                );
+              })()
+            ) : (
+              <div className="flex flex-col gap-1 overflow-y-auto max-h-[66px] pr-0.5">
+                <div className="text-[8px] font-bold text-cyanCustom tracking-[1px] uppercase -mb-0.5">
+                  TM終了後のCD残り
+                </div>
+                {runningTimers.map((tm) => {
+                  const tmRemaining = Math.max(0, tm.endAt - Date.now());
+                  const subDiff = diffMs - tmRemaining;
+                  const isSubPast = subDiff <= 0;
+                  const displaySubMs = isSubPast ? Math.abs(subDiff) : roundUpToSecond(subDiff);
+                  const subColor = isSubPast ? colors.red : colors.cyan;
+
+                  return (
+                    <div key={tm.id} className="flex justify-between items-center border-b border-white/5 pb-0.5">
+                      <span className="font-sans text-[10px] text-mutedLight truncate max-w-[70px]">
+                        {tm.label || formatTime(tm.totalMs)}
+                      </span>
+                      <span className="font-mono text-[14px] font-bold" style={{ color: subColor }}>
+                        {isSubPast ? "−" : ""}{formatTime(displaySubMs)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* 左スワイプ裏レイヤー: 編集と削除 */}
+          <div 
+            className="absolute inset-y-0 right-0 w-[156px] flex no-drag transition-opacity duration-150 z-0"
+            style={{
+              opacity: translateX < 0 ? Math.min(1, Math.abs(translateX) / 40) : 0
+            }}
+          >
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 setTranslateX(0);
-                isSwipedOpen.current = false;
+                swipeState.current = 'closed';
                 onEditLabel(item.id, item.label || "");
               }}
               className="flex-1 border-none bg-blueCustom text-white font-sans text-xs font-bold cursor-pointer active:brightness-90"
@@ -715,17 +821,17 @@
             </button>
           </div>
 
+          {/* メインカード本体: 右スワイプ時もCDの現在数字が綺麗に圧縮して常時見える */}
           <div
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerCancel}
-            onDragStart={(e) => e.preventDefault()}
-            onClick={handleTapAction}
-            className="relative bg-card border rounded-xl p-[9px_10px] flex items-center gap-2 select-none h-full transition-[border-color,box-shadow,transform] cursor-grab active:cursor-grabbing"
+            onClick={handleCardClick}
+            className="relative bg-card border rounded-xl p-[8px_10px] flex items-center gap-2 select-none h-full transition-[border-color,box-shadow,transform] cursor-grab active:cursor-grabbing z-10"
             style={{
-              borderColor: isPast ? colors.red : isNear ? colors.amber : colors.border,
-              boxShadow: isPast ? `0 0 12px ${colors.redGlow}` : "none",
+              borderColor: isPast ? colors.red : isNear ? colors.amber : isRightSwiped ? colors.cyanCustom + "88" : colors.border,
+              boxShadow: isPast ? `0 0 12px ${colors.redGlow}` : isRightSwiped ? `0 0 14px ${colors.cyanGlow}` : "none",
               transform: `translateX(${translateX}px)`,
               touchAction: 'pan-y'
             }}
@@ -754,20 +860,39 @@
               </button>
             </div>
 
-            <div className="flex-1 min-w-0">
-              <div className="font-sans text-[15px] color-gray mb-[2px] tracking-[0.5px] flex items-baseline gap-1.5 overflow-hidden whitespace-nowrap">
-                {item.label && <span className="text-grayCustom overflow-hidden text-ellipsis font-bold">{item.label}</span>}
-                <span className="font-mono text-[13px] text-mutedCustom shrink-0">→ {targetTimeString}</span>
+            <div className="flex-1 min-w-0 pr-1">
+              <div className="font-sans text-[14px] text-mutedLight mb-[1px] tracking-[0.5px] flex items-baseline gap-1.5 overflow-hidden whitespace-nowrap">
+                {item.label && <span className="text-grayCustom overflow-hidden text-ellipsis font-bold max-w-[80px]">{item.label}</span>}
+                <span className="font-mono text-[12px] text-mutedCustom shrink-0">→ {targetTimeString}</span>
                 {steal > 0 && <span className="text-amberDim text-[11px] shrink-0">−{steal}s</span>}
                 {isPast && <span className="text-redCustom text-[11px] shrink-0 font-bold">経過</span>}
                 {isNear && !isPast && <span className="text-amberCustom text-[11px] shrink-0">⚡</span>}
               </div>
               <div 
-                className="font-mono text-[38px] font-bold tracking-[1px] leading-[1.05]"
-                style={{ color: currentColor }}
+                className="font-mono font-bold tracking-[1px] leading-[1.0] transition-all"
+                style={{ 
+                  color: currentColor,
+                  fontSize: isRightSwiped ? '28px' : '38px'
+                }}
               >
                 {isPast ? "+" : ""}{formatTime(displayMs)}
               </div>
+            </div>
+
+            {/* 右端のインジケーター（通常時: TM連動案内 / スワイプ時: 元のCDであることを明示） */}
+            <div className="shrink-0 flex flex-col items-end justify-center pl-1 border-l border-white/5 no-drag">
+              {isRightSwiped ? (
+                <div className="text-right">
+                  <div className="text-[8px] font-bold text-amberCustom tracking-wide">CD現在値</div>
+                  <div className="text-[10px] font-mono text-mutedLight">タップで戻す</div>
+                </div>
+              ) : (
+                runningTimers.length > 0 && (
+                  <div className="flex items-center gap-1 text-[10px] text-cyanCustom font-bold tracking-tight opacity-75 bg-cyanCustom/10 px-1.5 py-0.5 rounded border border-cyanCustom/30">
+                    <span>▶TM差分</span>
+                  </div>
+                )
+              )}
             </div>
           </div>
         </div>
@@ -775,7 +900,7 @@
     }
 
     // カウントダウンリストマネージャー
-    function CountdownManager({ targets, setTargets, clipboardVal, stealSec, setStealSec, onOpenOutput }) {
+    function CountdownManager({ targets, setTargets, clipboardVal, stealSec, setStealSec, onOpenOutput, timers = [] }) {
       const [inputVal, setInputVal] = useState("");
       const [labelVal, setLabelVal] = useState("");
       const [presets, setPresets] = useState(() => {
@@ -784,7 +909,6 @@
         } catch(_) { return []; }
       });
       const [showSave, setShowSave] = useState(false);
-      const [orderList, setOrderList] = useState([]);
       const [anyDragging, setAnyDragging] = useState(false);
       const [labelEditItem, setLabelEditItem] = useState(null);
 
@@ -799,7 +923,7 @@
         const sortable = Sortable.create(scrollContainerRef.current, {
           delay: 400,
           delayOnTouchOnly: true,
-          touchStartThreshold: 5,
+          touchStartThreshold: 8,
           animation: 200,
           ghostClass: 'sortable-ghost',
           chosenClass: 'sortable-chosen',
@@ -814,14 +938,14 @@
           },
           onEnd: function (evt) {
             setAnyDragging(false);
-            if (evt.oldIndex !== evt.newIndex) {
-              const parent = evt.from;
-              const item = evt.item;
-              const referenceNode = parent.children[evt.oldIndex > evt.newIndex ? evt.oldIndex + 1 : evt.oldIndex];
-              const newOrder = Array.from(parent.children).map(el => Number(el.getAttribute('data-id')));
-              parent.insertBefore(item, referenceNode);
-              setOrderList(newOrder);
-            }
+            if (evt.oldIndex == null || evt.newIndex == null || evt.oldIndex === evt.newIndex) return;
+
+            setTargets(prev => {
+              const next = [...prev];
+              const [moved] = next.splice(evt.oldIndex, 1);
+              next.splice(evt.newIndex, 0, moved);
+              return next;
+            });
           }
         });
 
@@ -834,15 +958,6 @@
         if (clipboardVal) setInputVal(clipboardVal);
       }, [clipboardVal]);
 
-      useEffect(() => {
-        setOrderList(prev => {
-          const ids = targets.map(t => t.id);
-          const filtered = prev.filter(id => ids.includes(id));
-          const added = ids.filter(id => !filtered.includes(id));
-          return [...filtered, ...added];
-        });
-      }, [targets]);
-
       const addTarget = (rawTime, label) => {
         const parsed = parseInputDigits(rawTime);
         if (!parsed) return;
@@ -852,7 +967,7 @@
         if (targetMs <= Date.now()) {
           targetMs += 86400000;
         }
-        setTargets(prev => [...prev, { id: Date.now(), target: targetMs, label }]);
+        setTargets(prev => [...prev, { id: Date.now() + Math.random(), target: targetMs, label }]);
       };
 
       const handleAddSubmit = () => {
@@ -882,7 +997,7 @@
       };
 
       const reorderItems = (index, direction) => {
-        setOrderList(prev => {
+        setTargets(prev => {
           const next = [...prev];
           const swapIdx = index + direction;
           if (swapIdx < 0 || swapIdx >= next.length) return prev;
@@ -897,7 +1012,6 @@
         setLabelEditItem(null);
       };
 
-      const sortedTargets = orderList.map(id => targets.find(t => t.id === id)).filter(Boolean);
       const parsedInput = parseInputDigits(inputVal);
 
       return (
@@ -917,7 +1031,7 @@
               ))}
               <button
                 onClick={() => setShowSave(prev => !prev)}
-                className="px-2.5 py-1.2 rounded-[20px] text-[11px] font-sans tracking-[1px] cursor-pointer"
+                className="px-2.5 py-1 rounded-[20px] text-[11px] font-sans tracking-[1px] cursor-pointer"
                 style={{
                   background: showSave ? colors.amberGlow : colors.card,
                   border: `1px solid ${showSave ? colors.amber : colors.border}`,
@@ -944,7 +1058,7 @@
                 onChange={(e) => setInputVal(e.target.value.replace(/\D/g, "").slice(0, 6))}
                 onKeyDown={(e) => e.key === "Enter" && handleAddSubmit()}
                 placeholder="時刻 (例: 1430)"
-                className="bg-bg border border-border rounded-lg p-[7px_66px_7px_10px] text-amberCustom text-19 font-mono tracking-[3px] outline-none w-full box-border text-center animate-none"
+                className="bg-bg border border-border rounded-lg p-[7px_66px_7px_10px] text-amberCustom text-[19px] font-mono tracking-[3px] outline-none w-full box-border text-center animate-none"
               />
               {parsedInput && (
                 <div className="absolute right-2.5 top-1/2 -translate-y-1/2 font-mono text-[11px] text-amberDim pointer-events-none animate-none">
@@ -960,7 +1074,7 @@
                 onChange={(e) => setLabelVal(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && (showSave ? saveAsPreset() : handleAddSubmit())}
                 placeholder="ラベル（省略可）"
-                className="flex-1 bg-bg border border-border rounded-lg p-[6px_10px] text-mutedLight text-16 font-sans outline-none animate-none"
+                className="flex-1 bg-bg border border-border rounded-lg p-[6px_10px] text-mutedLight text-[16px] font-sans outline-none animate-none"
               />
               {showSave ? (
                 <button
@@ -988,22 +1102,23 @@
           </div>
 
           <div 
-            ref={scrollContainerRef}
+            ref={scrollContainerRef} 
             className={`flex-1 ${anyDragging ? 'overflow-hidden' : 'overflow-y-auto'}`}
           >
-            {sortedTargets.length === 0 ? (
+            {targets.length === 0 ? (
               <div className="text-center py-[22px] text-mutedCustom font-sans text-xs border border-dashed border-border rounded-xl no-drag">
                 ⏳ カウントダウンを追加<br />
-                <span className="text-[10px] opacity-50">▲▼タップで並び替え・ダブルタップで小窓化</span>
+                <span className="text-[10px] opacity-50">👉右ドラッグでTM差し引き・👈左ドラッグで編集/削除</span>
               </div>
             ) : (
-              sortedTargets.map((item, idx) => (
+              targets.map((item, idx) => (
                 <CountdownItem
                   key={item.id}
                   item={item}
                   steal={stealSec}
+                  timers={timers}
                   isFirst={idx === 0}
-                  isLast={idx === sortedTargets.length - 1}
+                  isLast={idx === targets.length - 1}
                   onDelete={(id) => setTargets(prev => prev.filter(t => t.id !== id))}
                   onMoveUp={() => reorderItems(idx, -1)}
                   onMoveDown={() => reorderItems(idx, 1)}
@@ -1054,16 +1169,17 @@
       );
     }
 
-    // タイマーアイテムコンポーネント (PC/スマホ両用 PointerEvents & 左右双方向スライド設計)
+    // タイマーアイテムコンポーネント (PC/スマホ両用 PointerEvents)
     function TimerItem({ timer, onUpdate, onDelete, onMoveUp, onMoveDown, isFirst, isLast, steal, onOpenOutput, onEditLabel }) {
       useLowPowerTrigger(timer.running ? "low" : "none");
 
       const [translateX, setTranslateX] = useState(0);
-      const [isSwiping, setIsSwiping] = useState(false);
-
+      const isDraggingRef = useRef(false);
       const startX = useRef(0);
+      const currentTx = useRef(0);
       const swipeState = useRef('closed');
       const lastTapTime = useRef(0);
+      const hasMoved = useRef(false);
       const swipeLimitLeft = 156;
       const swipeLimitRight = 120;
 
@@ -1082,34 +1198,37 @@
         if (e.target.closest('.no-drag')) return;
         if (e.pointerType === 'mouse' && e.button !== 0) return;
         startX.current = e.clientX;
-        setIsSwiping(true);
-        e.currentTarget.setPointerCapture(e.pointerId);
+        isDraggingRef.current = true;
+        hasMoved.current = false;
+
+        let initialOffset = 0;
+        if (swipeState.current === 'left') initialOffset = -swipeLimitLeft;
+        if (swipeState.current === 'right') initialOffset = swipeLimitRight;
+        currentTx.current = initialOffset;
+
+        try { e.currentTarget.setPointerCapture(e.pointerId); } catch(_) {}
       };
 
       const handlePointerMove = (e) => {
-        if (!isSwiping) return;
+        if (!isDraggingRef.current) return;
         const deltaX = e.clientX - startX.current;
-        let currentOffset = 0;
-        if (swipeState.current === 'left') {
-          currentOffset = -swipeLimitLeft;
-        } else if (swipeState.current === 'right') {
-          currentOffset = swipeLimitRight;
+        if (Math.abs(deltaX) > 4) {
+          hasMoved.current = true;
         }
-        
-        let tx = currentOffset + deltaX;
-        tx = Math.max(-swipeLimitLeft, Math.min(swipeLimitRight, tx));
-        setTranslateX(tx);
+        let nextTx = currentTx.current + deltaX;
+        nextTx = Math.max(-swipeLimitLeft, Math.min(swipeLimitRight, nextTx));
+        setTranslateX(nextTx);
       };
 
       const handlePointerUp = (e) => {
-        if (!isSwiping) return;
-        setIsSwiping(false);
+        if (!isDraggingRef.current) return;
+        isDraggingRef.current = false;
         try { e.currentTarget.releasePointerCapture(e.pointerId); } catch(_) {}
         
-        if (translateX < -swipeLimitLeft * 0.45) {
+        if (translateX < -swipeLimitLeft * 0.4) {
           setTranslateX(-swipeLimitLeft);
           swipeState.current = 'left';
-        } else if (translateX > swipeLimitRight * 0.45) {
+        } else if (translateX > swipeLimitRight * 0.4) {
           setTranslateX(swipeLimitRight);
           swipeState.current = 'right';
         } else {
@@ -1119,8 +1238,8 @@
       };
 
       const handlePointerCancel = (e) => {
-        if (!isSwiping) return;
-        setIsSwiping(false);
+        if (!isDraggingRef.current) return;
+        isDraggingRef.current = false;
         try { e.currentTarget.releasePointerCapture(e.pointerId); } catch(_) {}
         let orig = 0;
         if (swipeState.current === 'left') orig = -swipeLimitLeft;
@@ -1128,8 +1247,10 @@
         setTranslateX(orig);
       };
 
-      const handleTapAction = (e) => {
+      const handleCardClick = (e) => {
         if (e.target.closest('.no-drag')) return;
+        if (hasMoved.current) return;
+
         if (swipeState.current !== 'closed') {
           setTranslateX(0);
           swipeState.current = 'closed';
@@ -1150,14 +1271,14 @@
         : formattedTotal;
 
       return (
-        <div data-id={timer.id} className="relative overflow-hidden rounded-xl mb-[6px]" style={{ height: '110px' }}>
+        <div data-id={timer.id} className="relative overflow-hidden rounded-xl mb-[6px] select-none" style={{ height: '110px' }}>
           
-          {/* 右スワイプ裏レイヤー: 経過した時間 */}
+          {/* 右スワイプ裏レイヤー: 経過時間 */}
           <div 
             className="absolute inset-y-0 left-0 flex items-center justify-center bg-blueGlow border-r border-blueCustom/20 no-drag rounded-l-xl transition-opacity duration-150"
             style={{ 
               width: `${swipeLimitRight}px`,
-              opacity: translateX > 0 ? Math.min(1, translateX / swipeLimitRight) : 0
+              opacity: translateX > 0 ? Math.min(1, translateX / 40) : 0
             }}
           >
             <div className="text-center p-2">
@@ -1172,7 +1293,7 @@
           <div 
             className="absolute inset-y-0 right-0 w-[156px] flex no-drag transition-opacity duration-150"
             style={{
-              opacity: translateX < 0 ? Math.min(1, Math.abs(translateX) / swipeLimitLeft) : 0
+              opacity: translateX < 0 ? Math.min(1, Math.abs(translateX) / 40) : 0
             }}
           >
             <button
@@ -1203,8 +1324,7 @@
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerCancel}
-            onDragStart={(e) => e.preventDefault()}
-            onClick={handleTapAction}
+            onClick={handleCardClick}
             className="relative bg-card border rounded-xl p-[10px_12px_0] select-none h-full transition-[border-color,box-shadow,transform] cursor-grab active:cursor-grabbing"
             style={{
               borderColor: isOver ? colors.red : timer.done ? colors.green : isNearEnd ? colors.amber : timer.running ? colors.blue + "55" : colors.border,
@@ -1251,7 +1371,7 @@
                     e.stopPropagation();
                     onUpdate({ ...timer, running: false, remaining: timer.totalMs, done: false });
                   }}
-                  className="w-full h-[36px] p-0 bg-surface border border-border rounded-[9px] text-mutedCustom text-15 font-sans cursor-pointer flex items-center justify-center font-sans"
+                  className="w-full h-[36px] p-0 bg-surface border border-border rounded-[9px] text-mutedCustom text-[15px] font-sans cursor-pointer flex items-center justify-center font-sans"
                 >
                   ↺
                 </button>
@@ -1389,7 +1509,7 @@
         const sortable = Sortable.create(scrollContainerRef.current, {
           delay: 400,
           delayOnTouchOnly: true,
-          touchStartThreshold: 5,
+          touchStartThreshold: 8,
           animation: 200,
           ghostClass: 'sortable-ghost',
           chosenClass: 'sortable-chosen',
@@ -1404,22 +1524,14 @@
           },
           onEnd: function (evt) {
             setAnyDragging(false);
-            if (evt.oldIndex !== evt.newIndex) {
-              const parent = evt.from;
-              const item = evt.item;
-              const referenceNode = parent.children[evt.oldIndex > evt.newIndex ? evt.oldIndex + 1 : evt.oldIndex];
-              const newOrder = Array.from(parent.children).map(el => Number(el.getAttribute('data-id')));
-              parent.insertBefore(item, referenceNode);
+            if (evt.oldIndex == null || evt.newIndex == null || evt.oldIndex === evt.newIndex) return;
 
-              setTimers(prev => {
-                const next = [];
-                newOrder.forEach(id => {
-                  const found = prev.find(t => t.id === id);
-                  if (found) next.push(found);
-                });
-                return next;
-              });
-            }
+            setTimers(prev => {
+              const next = [...prev];
+              const [moved] = next.splice(evt.oldIndex, 1);
+              next.splice(evt.newIndex, 0, moved);
+              return next;
+            });
           }
         });
 
@@ -1552,7 +1664,7 @@
                   onChange={(e) => { setCustomInput(e.target.value.replace(/\D/g, "").slice(0, 6)); setSelectedPresetMs(0); }}
                   onKeyDown={(e) => e.key === "Enter" && createTimer()}
                   placeholder="設定値を入力"
-                  className="bg-bg border border-border rounded-lg p-[8px_64px_8px_12px] text-blueCustom text-15 font-mono tracking-[1px] outline-none w-full box-border placeholder:text-mutedCustom/70 placeholder:text-sm placeholder:tracking-normal"
+                  className="bg-bg border border-border rounded-lg p-[8px_64px_8px_12px] text-blueCustom text-[15px] font-mono tracking-[1px] outline-none w-full box-border placeholder:text-mutedCustom/70 placeholder:text-sm placeholder:tracking-normal"
                 />
                 {parsedCustom && (
                   <div className="absolute right-3 top-1/2 -translate-y-1/2 font-mono text-[10px] text-blueCustom opacity-50 pointer-events-none animate-none">
@@ -1566,7 +1678,7 @@
                 onChange={(e) => setLabelVal(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && createTimer()}
                 placeholder="ラベル"
-                className="w-[84px] bg-bg border border-border rounded-lg p-[6px_7px] text-mutedLight text-16 font-sans outline-none animate-none"
+                className="w-[84px] bg-bg border border-border rounded-lg p-[6px_7px] text-mutedLight text-[16px] font-sans outline-none animate-none"
               />
               <button
                 onClick={createTimer}
@@ -1961,7 +2073,7 @@
     }
 
     // 電卓
-    function CalculatorManager({ setClipboardVal }) {
+    function CalculatorManager({ setClipboardVal, isActive }) {
       const [expression, setExpression] = useState("");
       const [copySuccess, setCopySuccess] = useState(false);
 
@@ -2002,6 +2114,7 @@
       };
 
       useEffect(() => {
+        if (!isActive) return;
         const handlePhysicalKey = (e) => {
           if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
           const k = e.key;
@@ -2012,22 +2125,26 @@
         };
         window.addEventListener("keydown", handlePhysicalKey);
         return () => window.removeEventListener("keydown", handlePhysicalKey);
-      }, []);
+      }, [isActive]);
 
-      const copyToClipboard = () => {
+      const copyToClipboard = async () => {
         const sixDigits = formatTo6Digits(computedMs);
-        const tempInput = document.createElement("input");
-        tempInput.value = sixDigits;
-        document.body.appendChild(tempInput);
-        tempInput.select();
         try {
-          document.execCommand('copy');
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(sixDigits);
+          } else {
+            const tempInput = document.createElement("input");
+            tempInput.value = sixDigits;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+          }
           setCopySuccess(true);
           setTimeout(() => setCopySuccess(false), 2000);
         } catch (_) {
           console.error("Copy failed");
         }
-        document.body.removeChild(tempInput);
         setClipboardVal(sixDigits);
       };
 
@@ -2105,7 +2222,7 @@
         <div className="h-full flex flex-col p-[10px_12px] gap-1.5">
           <div className="bg-card border border-border rounded-[10px] p-[8px_12px] shrink-0 min-h-[40px]">
             <div style={{ ...labelStyle, fontSize: 7, marginBottom: 2 }}>式 <span className="opacity-40 font-normal">s=秒 / m=分 直接指定</span></div>
-            <div className="font-mono text-[14px] text-amberCustom tracking-[1px] leading-[1.3] min-h-[18px] word-break-all">
+            <div className="font-mono text-[14px] text-amberCustom tracking-[1px] leading-[1.3] min-h-[18px] break-all">
               {formatCalculatorFormula(expression) || <span className="text-mutedCustom opacity-40">数字を入力…</span>}
               {expression && !endsWithOperator(expression) && <span className="opacity-50">|</span>}
             </div>
@@ -2142,13 +2259,13 @@
             </button>
           </div>
 
-          <div className="flex flex-col gap-1.2 flex-1">
+          <div className="flex flex-col gap-1.5 flex-1">
             {keysLayout.map((row, rIdx) => (
-              <div key={rIdx} className="flex gap-1.2 flex-1">
+              <div key={rIdx} className="flex gap-1.5 flex-1">
                 {row.map(k => renderKeyButton(k))}
               </div>
             ))}
-            <div className="flex gap-1.2 flex-1">
+            <div className="flex gap-1.5 flex-1">
               {renderSpecialButton("C", colors.surface, colors.muted)}
               {renderSpecialButton("⌫", colors.surface, colors.amber)}
               {renderSpecialButton("-", lastOp === "-" ? colors.blueGlow : colors.surface, colors.blue)}
@@ -2714,7 +2831,6 @@
           className="fixed inset-0 z-[600] bg-[#020207] flex flex-col justify-between p-[4vh_6vw] text-center select-none cursor-pointer overflow-hidden animate-none"
           style={{ height: '100vh', width: '100vw' }}
         >
-          {/* 最上段 */}
           <div className="text-[12px] sm:text-[14px] md:text-[16px] font-sans font-bold text-mutedLight tracking-[5px] opacity-80 select-none shrink-0 z-10">
             {year}年 {month}月 {date}日 ({day}曜日)
           </div>
@@ -2800,6 +2916,8 @@
       const [isLandscape, setIsLandscape] = useState(false);
       const [showBlockAlert, setShowBlockAlert] = useState(false);
 
+      const blockClockUntilRef = useRef(0);
+
       const tabItems = [
         { id: "cd", label: "CD", icon: "⏰" },
         { id: "tm", label: "TM", icon: "⏳" },
@@ -2835,7 +2953,8 @@
             <HeaderClock 
               offsetMs={timeOffset} 
               setOffsetMs={setTimeOffset} 
-              onDoubleTap={() => setIsLandscape(true)} 
+              onDoubleTap={() => setIsLandscape(true)}
+              blockUntilRef={blockClockUntilRef}
             />
           </div>
 
@@ -2843,6 +2962,7 @@
             <CountdownManager
               targets={countdownTargets}
               setTargets={setCountdownTargets}
+              timers={timers}
               clipboardVal={clipboardValue}
               stealSec={cdSteal}
               setStealSec={setCdSteal}
@@ -2871,7 +2991,10 @@
           </div>
 
           <div className="flex-1 min-h-0 overflow-hidden flex flex-col" style={{ display: currentTab === "calc" ? "flex" : "none" }}>
-            <CalculatorManager setClipboardVal={setClipboardValue} />
+            <CalculatorManager 
+              setClipboardVal={setClipboardValue} 
+              isActive={currentTab === "calc"}
+            />
           </div>
 
           {activeOutputKey && (
@@ -2898,7 +3021,7 @@
               tmSteal={tmSteal}
               onClose={() => {
                 setIsLandscape(false);
-                window.blockHeaderClockUntil = Date.now() + 500;
+                blockClockUntilRef.current = Date.now() + 500;
               }}
             />
           )}
@@ -2937,4 +3060,3 @@
 </body>
 </html>
 
-```
