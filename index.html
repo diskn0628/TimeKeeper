@@ -77,7 +77,6 @@
       padding-right: env(safe-area-inset-right, 0px);
       box-sizing: border-box;
     }
-    /* カスタムスクロールバー */
     ::-webkit-scrollbar {
       width: 4px;
       height: 4px;
@@ -90,7 +89,6 @@
       border-radius: 2px;
     }
 
-    /* SortableJS 長押しドラッグ時のプレビュー効果 */
     .sortable-ghost {
       opacity: 0.25;
       background-color: #0c0c16 !important;
@@ -111,7 +109,6 @@
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
-    // カラー定義とデザイン設定
     const colors = {
       bg: '#06060e',
       surface: '#0f0f1c',
@@ -146,10 +143,8 @@
       fontWeight: 600
     };
 
-    // 共通時間処理ヘルパー
     const pad = (num) => String(Math.abs(Math.floor(num))).padStart(2, "0");
 
-    // ミリ秒をフォーマット
     function formatTime(ms) {
       const abs = Math.abs(ms);
       const h = Math.floor(abs / 3600000);
@@ -162,7 +157,6 @@
       return sign + `${pad(m)}:${pad(s)}`;
     }
 
-    // 常に hh:mm:ss 形式で出力するフォーマット
     function formatFullHMS(ms) {
       const abs = Math.abs(ms);
       const h = Math.floor(abs / 3600000);
@@ -172,7 +166,6 @@
       return sign + `${pad(h)}:${pad(m)}:${pad(s)}`;
     }
 
-    // ミリ秒精度を含むフォーマット
     function formatTimeMs(ms) {
       const abs = Math.abs(ms);
       const h = Math.floor(abs / 3600000);
@@ -186,8 +179,8 @@
       return `${sign}${timeStr}.${pad(centi)}`;
     }
 
-    // 文字列をパース
     function parseInputDigits(str) {
+      if (!str) return null;
       const clean = str.trim();
       if (!clean) return null;
 
@@ -222,7 +215,6 @@
       return { h, m, s, ms, str: `${pad(h)}:${pad(m)}:${pad(s)}` };
     }
 
-    // 電卓用の時間数式パース処理
     function parseCalculatorFormula(expr) {
       if (!expr) return 0;
       const tokens = expr.split(/([+-])/).filter(t => t !== "");
@@ -240,7 +232,6 @@
       return totalMs;
     }
 
-    // 電卓数式の表示用整形
     function formatCalculatorFormula(expr) {
       if (!expr) return "";
       return expr.split(/([+-])/).map(token => {
@@ -277,7 +268,6 @@
       return `${sign}${pad(h)}${pad(m)}${pad(s)}`;
     }
 
-    // 超低負荷マルチ駆動・自動バックグラウンド一時停止カスタムフック
     function useLowPowerTrigger(mode = "low") {
       const [, setTick] = useState(0);
       const timerRef = useRef(null);
@@ -290,9 +280,7 @@
       }, []);
 
       useEffect(() => {
-        if (!isPageVisible || mode === "none") {
-          return;
-        }
+        if (!isPageVisible || mode === "none") return;
 
         if (mode === "high") {
           let active = true;
@@ -316,7 +304,6 @@
       }, [mode, isPageVisible]);
     }
 
-    // 何秒早めるか設定コンポーネント
     function QuickOffsetButton({ value, onChange }) {
       const [showModal, setShowModal] = useState(false);
       const [inputValue, setInputValue] = useState("2");
@@ -347,6 +334,11 @@
         }
       };
 
+      const handlePointerCancel = () => {
+        clearTimeout(timerRef.current);
+        isLongPress.current = false;
+      };
+
       const saveOffset = () => {
         const val = parseInt(inputValue, 10);
         if (!isNaN(val) && val > 0) {
@@ -361,7 +353,8 @@
           <button
             onPointerDown={handlePointerDown}
             onPointerUp={handlePointerUp}
-            onPointerLeave={() => clearTimeout(timerRef.current)}
+            onPointerCancel={handlePointerCancel}
+            onPointerLeave={handlePointerCancel}
             onContextMenu={(e) => e.preventDefault()}
             className="flex items-center gap-1 px-[9px] py-[3px] text-[9px] font-bold tracking-[2px] rounded-[6px] border cursor-pointer select-none transition-all duration-150 shrink-0 no-drag"
             style={{
@@ -423,7 +416,6 @@
       );
     }
 
-    // 時刻手動設定ダイアログ付き現在時刻・オフセット時計
     function HeaderClock({ offsetMs, setOffsetMs, onDoubleTap, blockUntilRef }) {
       const [nowTime, setNowTime] = useState(Date.now());
       const [showModal, setShowModal] = useState(false);
@@ -452,22 +444,15 @@
       const targetTime = new Date(nowTime + offsetMs);
 
       const handlePointerDown = (e) => {
-        if (blockUntilRef && Date.now() < blockUntilRef.current) {
-          return;
-        }
-
+        if (blockUntilRef && Date.now() < blockUntilRef.current) return;
         isLongPressed.current = false;
-        if (longPressTimerRef.current) {
-          clearTimeout(longPressTimerRef.current);
-        }
+        if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
         
         longPressTimerRef.current = setTimeout(() => {
           isLongPressed.current = true;
           setInputValue(`${pad(targetTime.getHours())}${pad(targetTime.getMinutes())}${pad(targetTime.getSeconds())}`);
           setShowModal(true);
-          if (navigator.vibrate) {
-            navigator.vibrate(40);
-          }
+          if (navigator.vibrate) navigator.vibrate(40);
         }, 600);
       };
 
@@ -476,12 +461,10 @@
           clearTimeout(longPressTimerRef.current);
           longPressTimerRef.current = null;
         }
-        
         if (blockUntilRef && Date.now() < blockUntilRef.current) {
           isLongPressed.current = false;
           return;
         }
-
         if (isLongPressed.current) {
           isLongPressed.current = false;
           return;
@@ -496,7 +479,7 @@
         }
       };
 
-      const handlePointerLeave = () => {
+      const handlePointerCancel = () => {
         if (longPressTimerRef.current) {
           clearTimeout(longPressTimerRef.current);
           longPressTimerRef.current = null;
@@ -510,7 +493,7 @@
         const now = Date.now();
         const targetDate = new Date(now);
         targetDate.setHours(parsed.h, parsed.m, parsed.s, 0);
-        setOffsetMs(targetDate.getTime() - now.getTime());
+        setOffsetMs(targetDate.getTime() - now);
         setShowModal(false);
         isLongPressed.current = false;
       };
@@ -520,7 +503,8 @@
           <div
             onPointerDown={handlePointerDown}
             onPointerUp={handlePointerUp}
-            onPointerLeave={handlePointerLeave}
+            onPointerCancel={handlePointerCancel}
+            onPointerLeave={handlePointerCancel}
             className="text-right cursor-pointer select-none leading-[1.2] active:opacity-70"
           >
             <div 
@@ -586,7 +570,6 @@
       );
     }
 
-    // プリセットキーコンポーネント
     function PresetKey({ preset, onTap, onLongPress }) {
       const timerRef = useRef(null);
       const isLongPress = useRef(false);
@@ -607,11 +590,17 @@
         }
       };
 
+      const handlePointerCancel = () => {
+        clearTimeout(timerRef.current);
+        isLongPress.current = false;
+      };
+
       return (
         <button
           onPointerDown={handlePointerDown}
           onPointerUp={handlePointerUp}
-          onPointerLeave={() => clearTimeout(timerRef.current)}
+          onPointerCancel={handlePointerCancel}
+          onPointerLeave={handlePointerCancel}
           onContextMenu={(e) => e.preventDefault()}
           className="px-3 py-1 bg-card border border-amberCustom rounded-[20px] text-amberCustom text-[11px] font-sans font-semibold cursor-pointer tracking-[0.5px] select-none no-drag animate-none"
         >
@@ -621,66 +610,77 @@
       );
     }
 
-    // カウントダウンアイテムコンポーネント (PC/スマホ両対応・右スワイプ時も両方の数字が完全に見える分割連動UI)
-    function CountdownItem({ item, onDelete, onMoveUp, onMoveDown, isFirst, isLast, steal, onOpenOutput, onEditLabel, timers = [] }) {
-      const diffMs = item.target - Date.now() - (steal > 0 ? steal * 1000 : 0);
+    // CDタイマー項目（TM連携高精度・超視認性デザイン）
+    function CountdownItem({ item, onDelete, onMoveUp, onMoveDown, isFirst, isLast, steal, tmSteal = 0, onOpenOutput, onEditLabel, timers = [], timeOffset = 0 }) {
+      const virtualNow = Date.now() + timeOffset;
+      const diffMs = item.target - virtualNow - (steal > 0 ? steal * 1000 : 0);
       const isPast = diffMs <= 0;
       const isNear = diffMs > 0 && diffMs < 60000;
       const currentColor = isPast ? colors.red : isNear ? colors.amber : colors.white;
       const displayMs = isPast ? Math.abs(diffMs) : roundUpToSecond(diffMs);
 
+      const cardRef = useRef(null);
       const [translateX, setTranslateX] = useState(0);
       const isDraggingRef = useRef(false);
       const startX = useRef(0);
+      const startY = useRef(0);
       const currentTx = useRef(0);
       const swipeState = useRef('closed');
+      const isHorizontalMove = useRef(false);
       const lastTapTime = useRef(0);
       const hasMoved = useRef(false);
       
-      // 稼働中のTMタイマー一覧
       const runningTimers = timers.filter(t => t.running);
-      
-      // スワイプ上限: 右スワイプはカード幅の約45%（170px）に設定し、両方の数字が完全に画面内に収まるように設計
       const swipeLimitLeft = 156;
-      const swipeLimitRight = 175;
+      const swipeLimitRight = 220;
 
       const handlePointerDown = (e) => {
         if (e.target.closest('.no-drag')) return;
         if (e.pointerType === 'mouse' && e.button !== 0) return;
         startX.current = e.clientX;
+        startY.current = e.clientY;
         isDraggingRef.current = true;
+        isHorizontalMove.current = false;
         hasMoved.current = false;
         
         let initialOffset = 0;
         if (swipeState.current === 'left') initialOffset = -swipeLimitLeft;
         if (swipeState.current === 'right') initialOffset = swipeLimitRight;
         currentTx.current = initialOffset;
-
-        try {
-          e.currentTarget.setPointerCapture(e.pointerId);
-        } catch (_) {}
       };
 
       const handlePointerMove = (e) => {
         if (!isDraggingRef.current) return;
         const deltaX = e.clientX - startX.current;
-        if (Math.abs(deltaX) > 4) {
-          hasMoved.current = true;
+        const deltaY = e.clientY - startY.current;
+
+        if (!isHorizontalMove.current) {
+          if (Math.abs(deltaX) > 8 && Math.abs(deltaX) > Math.abs(deltaY)) {
+            isHorizontalMove.current = true;
+            try { cardRef.current?.setPointerCapture(e.pointerId); } catch (_) {}
+          } else if (Math.abs(deltaY) > 8) {
+            isDraggingRef.current = false;
+            return;
+          }
         }
-        let nextTx = currentTx.current + deltaX;
-        nextTx = Math.max(-swipeLimitLeft, Math.min(swipeLimitRight, nextTx));
-        setTranslateX(nextTx);
+
+        if (isHorizontalMove.current) {
+          hasMoved.current = true;
+          let nextTx = currentTx.current + deltaX;
+          nextTx = Math.max(-swipeLimitLeft, Math.min(swipeLimitRight, nextTx));
+          setTranslateX(nextTx);
+        }
       };
 
       const handlePointerUp = (e) => {
-        if (!isDraggingRef.current) return;
+        if (!isDraggingRef.current && !isHorizontalMove.current) return;
         isDraggingRef.current = false;
-        try { e.currentTarget.releasePointerCapture(e.pointerId); } catch(_) {}
+        try { cardRef.current?.releasePointerCapture(e.pointerId); } catch(_) {}
         
         if (translateX < -swipeLimitLeft * 0.4) {
           setTranslateX(-swipeLimitLeft);
           swipeState.current = 'left';
-        } else if (translateX > swipeLimitRight * 0.4) {
+        } else if (translateX > swipeLimitRight * 0.35) {
           setTranslateX(swipeLimitRight);
           swipeState.current = 'right';
         } else {
@@ -692,7 +692,7 @@
       const handlePointerCancel = (e) => {
         if (!isDraggingRef.current) return;
         isDraggingRef.current = false;
-        try { e.currentTarget.releasePointerCapture(e.pointerId); } catch(_) {}
+        try { cardRef.current?.releasePointerCapture(e.pointerId); } catch(_) {}
         let orig = 0;
         if (swipeState.current === 'left') orig = -swipeLimitLeft;
         if (swipeState.current === 'right') orig = swipeLimitRight;
@@ -724,66 +724,80 @@
       const isRightSwiped = translateX > 20;
 
       return (
-        <div data-id={item.id} className="relative overflow-hidden rounded-xl mb-1.5 select-none" style={{ height: '78px' }}>
-          
-          {/* 右スワイプ裏レイヤー: 稼働中タイマー差し引き結果の表示 */}
+        <div data-id={item.id} className="relative overflow-hidden rounded-xl mb-1.5 select-none" style={{ height: '82px' }}>
+          {/* 右スワイプ裏レイヤー: TM稼働計算結果 */}
           <div 
-            className="absolute inset-y-0 left-0 flex flex-col justify-center bg-[#061424] border-r-2 border-cyanCustom/50 no-drag rounded-l-xl transition-opacity duration-150 px-3 z-0"
+            className="absolute inset-y-0 left-0 flex flex-col justify-center bg-gradient-to-r from-[#031525] to-[#09223a] border-r-2 border-cyanCustom no-drag rounded-l-xl transition-opacity duration-150 px-3 z-0"
             style={{ 
               width: `${swipeLimitRight}px`,
-              opacity: translateX > 0 ? Math.min(1, translateX / 40) : 0
+              opacity: translateX > 0 ? Math.min(1, translateX / 35) : 0
             }}
           >
             {runningTimers.length === 0 ? (
-              <div>
-                <div style={{ ...labelStyle, fontSize: 8, color: colors.cyan, marginBottom: 1 }}>TMタイマー連携</div>
-                <div className="font-sans text-[11px] text-mutedLight">起動中タイマーなし</div>
+              <div className="flex flex-col items-start justify-center h-full">
+                <div className="flex items-center gap-1 text-[10px] font-bold text-cyanCustom tracking-wide uppercase">
+                  <span>✦ TMタイマー差分</span>
+                </div>
+                <div className="font-sans text-[12px] text-mutedLight mt-1">稼働中のタイマーがありません</div>
               </div>
             ) : runningTimers.length === 1 ? (
               (() => {
                 const tm = runningTimers[0];
-                const tmRemaining = Math.max(0, tm.endAt - Date.now());
+                const tmRemaining = Math.max(0, (tm.endAt - virtualNow) - (tmSteal > 0 ? tmSteal * 1000 : 0));
                 const subDiff = diffMs - tmRemaining;
-                const isSubPast = subDiff <= 0;
-                const displaySubMs = isSubPast ? Math.abs(subDiff) : roundUpToSecond(subDiff);
+                const isSubPast = subDiff < 0;
+                const displaySubMs = roundUpToSecond(Math.abs(subDiff));
                 const subColor = isSubPast ? colors.red : colors.cyan;
 
                 return (
-                  <div>
+                  <div className="flex flex-col justify-center h-full">
                     <div className="flex items-center justify-between gap-1 mb-0.5">
-                      <span className="text-[9px] font-bold text-cyanCustom tracking-[1px] uppercase">TM終了後</span>
-                      <span className="font-sans text-[10px] text-mutedLight truncate max-w-[80px]">
+                      <span className="text-[9px] font-bold tracking-[1px] uppercase" style={{ color: subColor }}>
+                        {isSubPast ? "⚠️ CD先行 / 不足" : "✓ TM終了後の余裕"}
+                      </span>
+                      <span className="font-sans text-[11px] text-whiteCustom truncate font-bold max-w-[100px]">
                         {tm.label || formatTime(tm.totalMs)}
                       </span>
                     </div>
-                    <div 
-                      className="font-mono text-[26px] font-extrabold leading-none tracking-tight"
-                      style={{ color: subColor, textShadow: `0 0 10px ${subColor}44` }}
-                    >
-                      {isSubPast ? "超 " : ""}{formatTime(displaySubMs)}
+                    
+                    <div className="flex items-baseline gap-2">
+                      <div 
+                        className="font-mono text-[30px] font-extrabold leading-none tracking-tight"
+                        style={{ color: subColor, textShadow: `0 0 12px ${subColor}55` }}
+                      >
+                        {isSubPast ? "−" : "+"}{formatTime(displaySubMs)}
+                      </div>
+                      <span className="text-[10px] font-bold font-sans tracking-wide" style={{ color: subColor }}>
+                        {isSubPast ? "不足" : "残余"}
+                      </span>
+                    </div>
+
+                    <div className="font-mono text-[9px] text-mutedLight/70 flex justify-between mt-0.5">
+                      <span>TM残: {formatTime(tmRemaining)}</span>
+                      <span>CD残: {formatTime(diffMs)}</span>
                     </div>
                   </div>
                 );
               })()
             ) : (
-              <div className="flex flex-col gap-1 overflow-y-auto max-h-[66px] pr-0.5">
-                <div className="text-[8px] font-bold text-cyanCustom tracking-[1px] uppercase -mb-0.5">
-                  TM終了後のCD残り
+              <div className="flex flex-col gap-1 overflow-y-auto max-h-[74px] pr-1 py-0.5">
+                <div className="text-[8px] font-bold text-cyanCustom tracking-[1px] uppercase sticky top-0 bg-[#031525] pb-0.5">
+                  TM終了後のCD余力比較
                 </div>
                 {runningTimers.map((tm) => {
-                  const tmRemaining = Math.max(0, tm.endAt - Date.now());
+                  const tmRemaining = Math.max(0, (tm.endAt - virtualNow) - (tmSteal > 0 ? tmSteal * 1000 : 0));
                   const subDiff = diffMs - tmRemaining;
-                  const isSubPast = subDiff <= 0;
-                  const displaySubMs = isSubPast ? Math.abs(subDiff) : roundUpToSecond(subDiff);
+                  const isSubPast = subDiff < 0;
+                  const displaySubMs = roundUpToSecond(Math.abs(subDiff));
                   const subColor = isSubPast ? colors.red : colors.cyan;
 
                   return (
-                    <div key={tm.id} className="flex justify-between items-center border-b border-white/5 pb-0.5">
-                      <span className="font-sans text-[10px] text-mutedLight truncate max-w-[70px]">
+                    <div key={tm.id} className="flex justify-between items-center border-b border-white/10 pb-0.5">
+                      <span className="font-sans text-[11px] text-whiteCustom font-bold truncate max-w-[90px]">
                         {tm.label || formatTime(tm.totalMs)}
                       </span>
-                      <span className="font-mono text-[14px] font-bold" style={{ color: subColor }}>
-                        {isSubPast ? "−" : ""}{formatTime(displaySubMs)}
+                      <span className="font-mono text-[14px] font-extrabold" style={{ color: subColor }}>
+                        {isSubPast ? "−" : "+"}{formatTime(displaySubMs)}
                       </span>
                     </div>
                   );
@@ -796,7 +810,7 @@
           <div 
             className="absolute inset-y-0 right-0 w-[156px] flex no-drag transition-opacity duration-150 z-0"
             style={{
-              opacity: translateX < 0 ? Math.min(1, Math.abs(translateX) / 40) : 0
+              opacity: translateX < 0 ? Math.min(1, Math.abs(translateX) / 35) : 0
             }}
           >
             <button
@@ -821,8 +835,9 @@
             </button>
           </div>
 
-          {/* メインカード本体: 右スワイプ時もCDの現在数字が綺麗に圧縮して常時見える */}
+          {/* スライドカード表面 */}
           <div
+            ref={cardRef}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
@@ -830,7 +845,7 @@
             onClick={handleCardClick}
             className="relative bg-card border rounded-xl p-[8px_10px] flex items-center gap-2 select-none h-full transition-[border-color,box-shadow,transform] cursor-grab active:cursor-grabbing z-10"
             style={{
-              borderColor: isPast ? colors.red : isNear ? colors.amber : isRightSwiped ? colors.cyanCustom + "88" : colors.border,
+              borderColor: isPast ? colors.red : isNear ? colors.amber : isRightSwiped ? colors.cyanCustom : colors.border,
               boxShadow: isPast ? `0 0 12px ${colors.redGlow}` : isRightSwiped ? `0 0 14px ${colors.cyanGlow}` : "none",
               transform: `translateX(${translateX}px)`,
               touchAction: 'pan-y'
@@ -862,7 +877,7 @@
 
             <div className="flex-1 min-w-0 pr-1">
               <div className="font-sans text-[14px] text-mutedLight mb-[1px] tracking-[0.5px] flex items-baseline gap-1.5 overflow-hidden whitespace-nowrap">
-                {item.label && <span className="text-grayCustom overflow-hidden text-ellipsis font-bold max-w-[80px]">{item.label}</span>}
+                {item.label && <span className="text-whiteCustom font-bold overflow-hidden text-ellipsis max-w-[85px]">{item.label}</span>}
                 <span className="font-mono text-[12px] text-mutedCustom shrink-0">→ {targetTimeString}</span>
                 {steal > 0 && <span className="text-amberDim text-[11px] shrink-0">−{steal}s</span>}
                 {isPast && <span className="text-redCustom text-[11px] shrink-0 font-bold">経過</span>}
@@ -872,14 +887,13 @@
                 className="font-mono font-bold tracking-[1px] leading-[1.0] transition-all"
                 style={{ 
                   color: currentColor,
-                  fontSize: isRightSwiped ? '28px' : '38px'
+                  fontSize: isRightSwiped ? '26px' : '38px'
                 }}
               >
                 {isPast ? "+" : ""}{formatTime(displayMs)}
               </div>
             </div>
 
-            {/* 右端のインジケーター（通常時: TM連動案内 / スワイプ時: 元のCDであることを明示） */}
             <div className="shrink-0 flex flex-col items-end justify-center pl-1 border-l border-white/5 no-drag">
               {isRightSwiped ? (
                 <div className="text-right">
@@ -888,8 +902,8 @@
                 </div>
               ) : (
                 runningTimers.length > 0 && (
-                  <div className="flex items-center gap-1 text-[10px] text-cyanCustom font-bold tracking-tight opacity-75 bg-cyanCustom/10 px-1.5 py-0.5 rounded border border-cyanCustom/30">
-                    <span>▶TM差分</span>
+                  <div className="flex items-center gap-1 text-[10px] text-cyanCustom font-bold tracking-tight bg-cyanCustom/10 px-2 py-1 rounded border border-cyanCustom/40 animate-pulse">
+                    <span>▶ TM差分</span>
                   </div>
                 )
               )}
@@ -899,8 +913,7 @@
       );
     }
 
-    // カウントダウンリストマネージャー
-    function CountdownManager({ targets, setTargets, clipboardVal, stealSec, setStealSec, onOpenOutput, timers = [] }) {
+    function CountdownManager({ targets, setTargets, clipboardVal, stealSec, setStealSec, tmStealSec = 0, onOpenOutput, timers = [], timeOffset = 0 }) {
       const [inputVal, setInputVal] = useState("");
       const [labelVal, setLabelVal] = useState("");
       const [presets, setPresets] = useState(() => {
@@ -915,7 +928,7 @@
       const inputRef = useRef(null);
       const scrollContainerRef = useRef(null);
 
-      useLowPowerTrigger("low");
+      useLowPowerTrigger(targets.length > 0 || timers.some(t => t.running) ? "low" : "none");
 
       useEffect(() => {
         if (!scrollContainerRef.current) return;
@@ -932,9 +945,7 @@
           
           onStart: function () {
             setAnyDragging(true);
-            if (navigator.vibrate) {
-              navigator.vibrate(30);
-            }
+            if (navigator.vibrate) navigator.vibrate(30);
           },
           onEnd: function (evt) {
             setAnyDragging(false);
@@ -961,10 +972,11 @@
       const addTarget = (rawTime, label) => {
         const parsed = parseInputDigits(rawTime);
         if (!parsed) return;
-        const now = new Date();
+        const virtualNow = Date.now() + timeOffset;
+        const now = new Date(virtualNow);
         now.setHours(parsed.h, parsed.m, parsed.s, 0);
         let targetMs = now.getTime();
-        if (targetMs <= Date.now()) {
+        if (targetMs <= virtualNow) {
           targetMs += 86400000;
         }
         setTargets(prev => [...prev, { id: Date.now() + Math.random(), target: targetMs, label }]);
@@ -1108,7 +1120,7 @@
             {targets.length === 0 ? (
               <div className="text-center py-[22px] text-mutedCustom font-sans text-xs border border-dashed border-border rounded-xl no-drag">
                 ⏳ カウントダウンを追加<br />
-                <span className="text-[10px] opacity-50">👉右ドラッグでTM差し引き・👈左ドラッグで編集/削除</span>
+                <span className="text-[10px] opacity-60 text-cyanCustom">👉右スワイプでTM稼働差分を大きく確認</span>
               </div>
             ) : (
               targets.map((item, idx) => (
@@ -1116,7 +1128,9 @@
                   key={item.id}
                   item={item}
                   steal={stealSec}
+                  tmSteal={tmStealSec}
                   timers={timers}
+                  timeOffset={timeOffset}
                   isFirst={idx === 0}
                   isLast={idx === targets.length - 1}
                   onDelete={(id) => setTargets(prev => prev.filter(t => t.id !== id))}
@@ -1169,13 +1183,28 @@
       );
     }
 
-    // タイマーアイテムコンポーネント (PC/スマホ両用 PointerEvents)
-    function TimerItem({ timer, onUpdate, onDelete, onMoveUp, onMoveDown, isFirst, isLast, steal, onOpenOutput, onEditLabel }) {
-      useLowPowerTrigger(timer.running ? "low" : "none");
-
+    function TimerItem({ 
+      timer, 
+      onUpdate, 
+      onDelete, 
+      onMoveUp, 
+      onMoveDown, 
+      isFirst, 
+      isLast, 
+      steal, 
+      onOpenOutput, 
+      onEditLabel,
+      refTimer,
+      onToggleRef,
+      timeOffset = 0
+    }) {
+      const virtualNow = Date.now() + timeOffset;
+      const cardRef = useRef(null);
       const [translateX, setTranslateX] = useState(0);
       const isDraggingRef = useRef(false);
       const startX = useRef(0);
+      const startY = useRef(0);
+      const isHorizontalMove = useRef(false);
       const currentTx = useRef(0);
       const swipeState = useRef('closed');
       const lastTapTime = useRef(0);
@@ -1183,7 +1212,7 @@
       const swipeLimitLeft = 156;
       const swipeLimitRight = 120;
 
-      const deltaMs = timer.running ? timer.endAt - Date.now() : timer.remaining;
+      const deltaMs = timer.running ? (timer.endAt - virtualNow) : timer.remaining;
       const isOver = deltaMs < 0 && timer.running;
       const offsetMs = steal > 0 ? deltaMs - (steal * 1000) : deltaMs;
       
@@ -1194,36 +1223,69 @@
 
       const elapsedTime = Math.max(0, timer.totalMs - deltaMs);
 
+      // --- 基準タイマーとの差分計算 (基準 - 自身) ---
+      const isSelfRef = refTimer && refTimer.id === timer.id;
+      let diffData = null;
+
+      if (refTimer && !isSelfRef) {
+        // 完了状態なら0として計算
+        const refEffective = refTimer.done ? 0 : (refTimer.running ? (refTimer.endAt - virtualNow) : refTimer.remaining);
+        const selfEffective = timer.done ? 0 : (timer.running ? (timer.endAt - virtualNow) : timer.remaining);
+
+        const diffMs = refEffective - selfEffective;
+        const isDiffMinus = diffMs < 0;
+        const displayDiffMs = roundUpToSecond(Math.abs(diffMs));
+
+        diffData = {
+          ms: diffMs,
+          display: `${isDiffMinus ? "−" : "+"}${formatTime(displayDiffMs)}`,
+          status: isDiffMinus ? "不足" : "残余",
+          color: isDiffMinus ? colors.red : colors.cyan
+        };
+      }
+
       const handlePointerDown = (e) => {
         if (e.target.closest('.no-drag')) return;
         if (e.pointerType === 'mouse' && e.button !== 0) return;
         startX.current = e.clientX;
+        startY.current = e.clientY;
         isDraggingRef.current = true;
+        isHorizontalMove.current = false;
         hasMoved.current = false;
 
         let initialOffset = 0;
         if (swipeState.current === 'left') initialOffset = -swipeLimitLeft;
         if (swipeState.current === 'right') initialOffset = swipeLimitRight;
         currentTx.current = initialOffset;
-
-        try { e.currentTarget.setPointerCapture(e.pointerId); } catch(_) {}
       };
 
       const handlePointerMove = (e) => {
         if (!isDraggingRef.current) return;
         const deltaX = e.clientX - startX.current;
-        if (Math.abs(deltaX) > 4) {
-          hasMoved.current = true;
+        const deltaY = e.clientY - startY.current;
+
+        if (!isHorizontalMove.current) {
+          if (Math.abs(deltaX) > 8 && Math.abs(deltaX) > Math.abs(deltaY)) {
+            isHorizontalMove.current = true;
+            try { cardRef.current?.setPointerCapture(e.pointerId); } catch (_) {}
+          } else if (Math.abs(deltaY) > 8) {
+            isDraggingRef.current = false;
+            return;
+          }
         }
-        let nextTx = currentTx.current + deltaX;
-        nextTx = Math.max(-swipeLimitLeft, Math.min(swipeLimitRight, nextTx));
-        setTranslateX(nextTx);
+
+        if (isHorizontalMove.current) {
+          hasMoved.current = true;
+          let nextTx = currentTx.current + deltaX;
+          nextTx = Math.max(-swipeLimitLeft, Math.min(swipeLimitRight, nextTx));
+          setTranslateX(nextTx);
+        }
       };
 
       const handlePointerUp = (e) => {
-        if (!isDraggingRef.current) return;
+        if (!isDraggingRef.current && !isHorizontalMove.current) return;
         isDraggingRef.current = false;
-        try { e.currentTarget.releasePointerCapture(e.pointerId); } catch(_) {}
+        try { cardRef.current?.releasePointerCapture(e.pointerId); } catch(_) {}
         
         if (translateX < -swipeLimitLeft * 0.4) {
           setTranslateX(-swipeLimitLeft);
@@ -1240,7 +1302,7 @@
       const handlePointerCancel = (e) => {
         if (!isDraggingRef.current) return;
         isDraggingRef.current = false;
-        try { e.currentTarget.releasePointerCapture(e.pointerId); } catch(_) {}
+        try { cardRef.current?.releasePointerCapture(e.pointerId); } catch(_) {}
         let orig = 0;
         if (swipeState.current === 'left') orig = -swipeLimitLeft;
         if (swipeState.current === 'right') orig = swipeLimitRight;
@@ -1272,7 +1334,6 @@
 
       return (
         <div data-id={timer.id} className="relative overflow-hidden rounded-xl mb-[6px] select-none" style={{ height: '110px' }}>
-          
           {/* 右スワイプ裏レイヤー: 経過時間 */}
           <div 
             className="absolute inset-y-0 left-0 flex items-center justify-center bg-blueGlow border-r border-blueCustom/20 no-drag rounded-l-xl transition-opacity duration-150"
@@ -1320,6 +1381,7 @@
 
           {/* スライドカード本体 */}
           <div
+            ref={cardRef}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
@@ -1327,13 +1389,13 @@
             onClick={handleCardClick}
             className="relative bg-card border rounded-xl p-[10px_12px_0] select-none h-full transition-[border-color,box-shadow,transform] cursor-grab active:cursor-grabbing"
             style={{
-              borderColor: isOver ? colors.red : timer.done ? colors.green : isNearEnd ? colors.amber : timer.running ? colors.blue + "55" : colors.border,
-              boxShadow: isOver ? `0 0 12px ${colors.redGlow}` : "none",
+              borderColor: isSelfRef ? colors.cyanCustom : (isOver ? colors.red : timer.done ? colors.green : isNearEnd ? colors.amber : timer.running ? colors.blue + "55" : colors.border),
+              boxShadow: isSelfRef ? `0 0 14px ${colors.cyanGlow}` : (isOver ? `0 0 12px ${colors.redGlow}` : "none"),
               transform: `translateX(${translateX}px)`,
               touchAction: 'pan-y'
             }}
           >
-            <div className="flex items-center justify-between gap-[8px] pb-2.5">
+            <div className="flex items-center justify-between gap-[6px] pb-2.5">
               <div className="flex flex-col gap-[3px] shrink-0 no-drag">
                 <button 
                   onClick={(e) => { e.stopPropagation(); onMoveUp(); }}
@@ -1353,19 +1415,53 @@
                 </button>
               </div>
 
-              <div className="flex-1 min-w-0 px-1">
-                <div className="font-sans text-[22px] font-bold text-whiteCustom leading-tight overflow-hidden text-ellipsis whitespace-nowrap">
-                  {displayLabel}
+              <div className="flex-1 min-w-0 px-0.5">
+                <div className="flex items-center gap-1.5 overflow-hidden whitespace-nowrap mb-0.5">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleRef(timer.id);
+                    }}
+                    className="px-1.5 py-[1px] rounded text-[9px] font-sans font-bold tracking-tight shrink-0 border no-drag transition-colors active:scale-95"
+                    style={{
+                      background: isSelfRef ? colors.cyanCustom : 'transparent',
+                      color: isSelfRef ? '#06060e' : colors.mutedLight,
+                      borderColor: isSelfRef ? colors.cyanCustom : colors.border
+                    }}
+                  >
+                    {isSelfRef ? "★基準" : "REF"}
+                  </button>
+
+                  <div className="font-sans text-[16px] sm:text-[18px] font-bold text-whiteCustom leading-tight overflow-hidden text-ellipsis whitespace-nowrap flex-1">
+                    {displayLabel}
+                  </div>
                 </div>
-                <div 
-                  className="font-mono text-[54px] font-extrabold tracking-tighter leading-none" 
-                  style={{ color: currentColor, textShadow: timer.running ? `0 0 10px ${currentColor}33` : "none" }}
-                >
-                  {timer.done ? "完了" : formatTime(displayMs)}
+
+                <div className="flex items-baseline justify-between gap-1">
+                  <div 
+                    className="font-mono text-[40px] sm:text-[44px] font-extrabold tracking-tighter leading-none truncate" 
+                    style={{ color: currentColor, textShadow: timer.running ? `0 0 10px ${currentColor}33` : "none" }}
+                  >
+                    {timer.done ? "完了" : formatTime(displayMs)}
+                  </div>
+
+                  {diffData && (
+                    <div 
+                      className="px-1.5 py-[2px] rounded border flex flex-col items-center leading-none shrink-0"
+                      style={{
+                        background: diffData.color === colors.red ? colors.redGlow : colors.cyanGlow,
+                        borderColor: diffData.color + "66",
+                        color: diffData.color
+                      }}
+                    >
+                      <span className="text-[7px] font-sans font-bold uppercase tracking-tight">{diffData.status}</span>
+                      <span className="font-mono text-[13px] font-extrabold tracking-tight">{diffData.display}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              <div className="flex flex-col gap-[6px] shrink-0 w-[84px] no-drag">
+              <div className="flex flex-col gap-[6px] shrink-0 w-[78px] sm:w-[84px] no-drag">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -1379,7 +1475,7 @@
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      const limit = Date.now() + (timer.remaining > 0 ? timer.remaining : timer.totalMs);
+                      const limit = virtualNow + (timer.remaining > 0 ? timer.remaining : timer.totalMs);
                       onUpdate({ ...timer, running: true, endAt: limit, done: false });
                     }}
                     className="w-full h-[54px] bg-blueGlow border border-blueCustom rounded-lg text-blueCustom text-[12px] font-sans font-bold tracking-[1px] cursor-pointer flex items-center justify-center font-sans"
@@ -1427,7 +1523,6 @@
       );
     }
 
-    // 各プリセットボタン
     function CustomPresetButton({ preset, isSelected, onTap, onLongPress }) {
       const timerRef = useRef(null);
       const isLongPress = useRef(false);
@@ -1448,11 +1543,17 @@
         }
       };
 
+      const handlePointerCancel = () => {
+        clearTimeout(timerRef.current);
+        isLongPress.current = false;
+      };
+
       return (
         <button
           onPointerDown={handlePointerDown}
           onPointerUp={handlePointerUp}
-          onPointerLeave={() => clearTimeout(timerRef.current)}
+          onPointerCancel={handlePointerCancel}
+          onPointerLeave={handlePointerCancel}
           onContextMenu={(e) => e.preventDefault()}
           className="px-2.5 py-1 rounded-[7px] text-[11px] font-sans font-semibold cursor-pointer select-none active:scale-95 transition-all duration-200 shrink-0 font-sans"
           style={{
@@ -1469,15 +1570,18 @@
       );
     }
 
-    // タイマータブマネージャー
-    function TimerManager({ timers, setTimers, clipboardVal, stealSec, setStealSec, onOpenOutput }) {
+    function TimerManager({ timers, setTimers, clipboardVal, stealSec, setStealSec, onOpenOutput, timeOffset = 0 }) {
       const [customInput, setCustomInput] = useState("");
       const [labelVal, setLabelVal] = useState("");
       const [selectedPresetMs, setSelectedPresetMs] = useState(0);
       const [anyDragging, setAnyDragging] = useState(false);
       const [labelEditItem, setLabelEditItem] = useState(null);
+      const [refTimerId, setRefTimerId] = useState(null);
 
       const scrollContainerRef = useRef(null);
+
+      const isAnyTimerRunning = timers.some(t => t.running);
+      useLowPowerTrigger(isAnyTimerRunning ? "low" : "none");
 
       const [presets, setPresets] = useState(() => {
         try {
@@ -1518,9 +1622,7 @@
           
           onStart: function () {
             setAnyDragging(true);
-            if (navigator.vibrate) {
-              navigator.vibrate(30);
-            }
+            if (navigator.vibrate) navigator.vibrate(30);
           },
           onEnd: function (evt) {
             setAnyDragging(false);
@@ -1627,6 +1729,13 @@
       };
 
       const parsedPresetModal = parseInputDigits(presetModalInput);
+      const refTimer = timers.find(t => t.id === refTimerId) || null;
+
+      const toggleRefTimer = (id) => {
+        setRefTimerId(prev => prev === id ? null : id);
+      };
+
+      const virtualNow = Date.now() + timeOffset;
 
       return (
         <div className="h-full flex flex-col p-[10px_12px] gap-1.5 overflow-hidden">
@@ -1693,6 +1802,27 @@
             </div>
           </div>
 
+          {/* 基準タイマー選択中のインジケーターバー */}
+          {refTimer && (
+            <div className="bg-cyanCustom/10 border border-cyanCustom/40 rounded-lg px-3 py-1.5 flex items-center justify-between shrink-0 no-drag">
+              <div className="flex items-center gap-2 overflow-hidden">
+                <span className="text-cyanCustom text-xs font-bold">★ 差分基準:</span>
+                <span className="font-sans text-xs text-whiteCustom truncate max-w-[170px]">
+                  {refTimer.label || formatTime(refTimer.totalMs)}
+                </span>
+                <span className="font-mono text-xs text-cyanCustom font-bold">
+                  ({formatTime(refTimer.done ? 0 : (refTimer.running ? (refTimer.endAt - virtualNow) : refTimer.remaining))})
+                </span>
+              </div>
+              <button
+                onClick={() => setRefTimerId(null)}
+                className="text-[10px] text-mutedLight hover:text-white px-1.5 py-0.5 bg-card rounded border border-border cursor-pointer font-sans"
+              >
+                解除✕
+              </button>
+            </div>
+          )}
+
           <div 
             ref={scrollContainerRef} 
             className={`flex-1 ${anyDragging ? 'overflow-hidden' : 'overflow-y-auto'}`}
@@ -1700,7 +1830,7 @@
             {timers.length === 0 ? (
               <div className="text-center py-[22px] text-mutedCustom font-sans text-xs border border-dashed border-border rounded-xl no-drag">
                 ⏳ タイマーを追加<br />
-                <span className="text-[10px] opacity-50">複数同時起動・▲▼タップで並び替え・ダブルタップで小窓化</span>
+                <span className="text-[10px] opacity-50">REFタップで基準指定・差分を瞬時に比較</span>
               </div>
             ) : (
               timers.map((t, idx) => (
@@ -1708,10 +1838,16 @@
                   key={t.id}
                   timer={t}
                   steal={stealSec}
+                  timeOffset={timeOffset}
+                  refTimer={refTimer}
+                  onToggleRef={toggleRefTimer}
                   isFirst={idx === 0}
                   isLast={idx === timers.length - 1}
                   onUpdate={(updated) => setTimers(prev => prev.map(item => item.id === updated.id ? updated : item))}
-                  onDelete={(id) => setTimers(prev => prev.filter(t => t.id !== id))}
+                  onDelete={(id) => {
+                    setTimers(prev => prev.filter(t => t.id !== id));
+                    if (refTimerId === id) setRefTimerId(null);
+                  }}
                   onMoveUp={() => reorderTimers(idx, -1)}
                   onMoveDown={() => reorderTimers(idx, 1)}
                   onOpenOutput={onOpenOutput}
@@ -1821,7 +1957,6 @@
       );
     }
 
-    // ストップウォッチ
     function StopwatchManager({ swState, setSwState, clipboardVal, onOpenOutput }) {
       const { running, laps, accumulated, startedAt } = swState;
       const accumulatedRef = useRef(accumulated);
@@ -2072,7 +2207,6 @@
       );
     }
 
-    // 電卓
     function CalculatorManager({ setClipboardVal, isActive }) {
       const [expression, setExpression] = useState("");
       const [copySuccess, setCopySuccess] = useState(false);
@@ -2127,24 +2261,22 @@
         return () => window.removeEventListener("keydown", handlePhysicalKey);
       }, [isActive]);
 
-      const copyToClipboard = async () => {
+      const copyToClipboard = () => {
         const sixDigits = formatTo6Digits(computedMs);
         try {
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            await navigator.clipboard.writeText(sixDigits);
-          } else {
-            const tempInput = document.createElement("input");
-            tempInput.value = sixDigits;
-            document.body.appendChild(tempInput);
-            tempInput.select();
-            document.execCommand('copy');
-            document.body.removeChild(tempInput);
-          }
+          const tempInput = document.createElement("input");
+          tempInput.setAttribute("readonly", "");
+          tempInput.style.position = "absolute";
+          tempInput.style.left = "-9999px";
+          tempInput.value = sixDigits;
+          document.body.appendChild(tempInput);
+          tempInput.select();
+          document.execCommand('copy');
+          document.body.removeChild(tempInput);
+          
           setCopySuccess(true);
           setTimeout(() => setCopySuccess(false), 2000);
-        } catch (_) {
-          console.error("Copy failed");
-        }
+        } catch (_) {}
         setClipboardVal(sixDigits);
       };
 
@@ -2276,11 +2408,9 @@
       );
     }
 
-    // 出力画面/フローティングミニウィンドウ
-    function FloatingOutput({ sourceKey, cdTargets, timers, swState, cdSteal, tmSteal, onClose, onShowBlockAlert }) {
+    function FloatingOutput({ sourceKey, cdTargets, timers, swState, cdSteal, tmSteal, onClose, onShowBlockAlert, timeOffset = 0 }) {
       const [position, setPosition] = useState({ x: 16, y: 80 });
       const [size, setSize] = useState({ w: 240, h: 140 }); 
-      
       const [showCloseBtn, setShowCloseBtn] = useState(false);
       const [labelWeight, setLabelWeight] = useState(0.35);
 
@@ -2291,20 +2421,18 @@
       const isResizingDivider = useRef(false);
       const lastTapTime = useRef(0);
       const boxRef = useRef(null);
-
       const externalWinRef = useRef(null);
 
       const getFloatingFpsMode = () => {
-        if (sourceKey.type === "sw") {
-          return swState.running ? "high" : "none";
-        }
+        if (sourceKey.type === "sw") return swState.running ? "high" : "none";
         if (sourceKey.type === "tm") {
           const timer = timers.find(t => t.id === sourceKey.id);
           return (timer && timer.running) ? "low" : "none";
         }
         const item = cdTargets.find(t => t.id === sourceKey.id);
         if (item) {
-          const remaining = item.target - Date.now();
+          const virtualNow = Date.now() + timeOffset;
+          const remaining = item.target - virtualNow;
           return remaining > 0 ? "low" : "none";
         }
         return "none";
@@ -2313,13 +2441,15 @@
       const fpsMode = getFloatingFpsMode();
       useLowPowerTrigger(fpsMode);
 
+      const virtualNow = Date.now() + timeOffset;
+
       const itemInfo = (() => {
         const { type, id } = sourceKey;
 
         if (type === "cd") {
           const item = cdTargets.find(t => t.id === id);
           if (!item) return { display: "–:–", color: colors.muted, label: "–", progress: 0 };
-          const remaining = item.target - Date.now() - (cdSteal > 0 ? cdSteal * 1000 : 0);
+          const remaining = item.target - virtualNow - (cdSteal > 0 ? cdSteal * 1000 : 0);
           const isPast = remaining <= 0;
           const displayMs = isPast ? Math.abs(remaining) : roundUpToSecond(remaining);
           return {
@@ -2333,9 +2463,10 @@
         if (type === "tm") {
           const timer = timers.find(t => t.id === id);
           if (!timer) return { display: "–:–", color: colors.muted, label: "–", progress: 0 };
-          const baseRemaining = timer.running ? Math.max(0, timer.endAt - Date.now()) : timer.remaining;
-          const offsetRemaining = tmSteal > 0 ? Math.max(0, baseRemaining - tmSteal * 1000) : baseRemaining;
-          const displayMs = timer.done ? 0 : roundUpToSecond(offsetRemaining);
+          const baseRemaining = timer.running ? (timer.endAt - virtualNow) : timer.remaining;
+          const offsetRemaining = tmSteal > 0 ? baseRemaining - (tmSteal * 1000) : baseRemaining;
+          const isOver = offsetRemaining < 0 && timer.running;
+          const displayMs = timer.done ? 0 : isOver ? offsetRemaining : roundUpToSecond(Math.max(0, offsetRemaining));
           const progress = timer.totalMs > 0 ? Math.max(0, Math.min(1, baseRemaining / timer.totalMs)) : 1;
           
           const formattedTotal = formatTime(timer.totalMs);
@@ -2346,8 +2477,8 @@
           const isNear = baseRemaining < 10000 && baseRemaining > 0 && timer.running;
 
           return {
-            display: timer.done ? "完了" : formatTime(displayMs),
-            color: timer.done ? colors.green : timer.running ? (isNear ? colors.amber : colors.blue) : colors.mutedLight,
+            display: timer.done ? "完了" : isOver ? formatTime(displayMs) : formatTime(displayMs),
+            color: timer.done ? colors.green : isOver ? colors.red : timer.running ? (isNear ? colors.amber : colors.blue) : colors.mutedLight,
             label: displayLabel,
             progress: progress
           };
@@ -2367,27 +2498,29 @@
       useEffect(() => {
         const extWin = externalWinRef.current;
         if (extWin && !extWin.closed) {
-          const labelEl = extWin.document.getElementById('child-label');
-          const timeEl = extWin.document.getElementById('child-time');
-          const progContainer = extWin.document.getElementById('child-progress-container');
-          const progBar = extWin.document.getElementById('child-progress-bar');
+          try {
+            const labelEl = extWin.document.getElementById('child-label');
+            const timeEl = extWin.document.getElementById('child-time');
+            const progContainer = extWin.document.getElementById('child-progress-container');
+            const progBar = extWin.document.getElementById('child-progress-bar');
 
-          if (labelEl) labelEl.textContent = itemInfo.label;
-          if (timeEl) {
-            timeEl.textContent = itemInfo.display;
-            timeEl.style.color = itemInfo.color;
-            timeEl.style.textShadow = `0 0 35px ${itemInfo.color}66`;
-          }
-          if (progContainer && progBar) {
-            if (sourceKey.type === 'tm' && itemInfo.progress > 0) {
-              progContainer.style.display = 'block';
-              progBar.style.width = `${itemInfo.progress * 100}%`;
-              progBar.style.background = itemInfo.color;
-              progBar.style.boxShadow = `0 0 10px ${itemInfo.color}88`;
-            } else {
-              progContainer.style.display = 'none';
+            if (labelEl) labelEl.textContent = itemInfo.label;
+            if (timeEl) {
+              timeEl.textContent = itemInfo.display;
+              timeEl.style.color = itemInfo.color;
+              timeEl.style.textShadow = `0 0 35px ${itemInfo.color}66`;
             }
-          }
+            if (progContainer && progBar) {
+              if (sourceKey.type === 'tm' && itemInfo.progress > 0) {
+                progContainer.style.display = 'block';
+                progBar.style.width = `${itemInfo.progress * 100}%`;
+                progBar.style.background = itemInfo.color;
+                progBar.style.boxShadow = `0 0 10px ${itemInfo.color}88`;
+              } else {
+                progContainer.style.display = 'none';
+              }
+            }
+          } catch (_) {}
         }
       }, [itemInfo, sourceKey.type]);
 
@@ -2401,7 +2534,6 @@
 
       const handleOpenExternalWindow = (e) => {
         e.stopPropagation();
-        
         if (externalWinRef.current && !externalWinRef.current.closed) {
           externalWinRef.current.focus();
           return;
@@ -2412,107 +2544,110 @@
         const left = (window.screen.width - winWidth) / 2;
         const top = (window.screen.height - winHeight) / 2;
 
-        const extWin = window.open(
-          'about:blank',
-          `tk_monitor_${Date.now()}`,
-          `width=${winWidth},height=${winHeight},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no`
-        );
+        try {
+          const extWin = window.open(
+            'about:blank',
+            `tk_monitor_${Date.now()}`,
+            `width=${winWidth},height=${winHeight},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no`
+          );
 
-        if (!extWin) {
-          onShowBlockAlert(true);
-          return;
-        }
+          if (!extWin) {
+            onShowBlockAlert(true);
+            return;
+          }
 
-        const doc = extWin.document;
-        doc.write(`
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <title>Timekeeper - Monitor Display</title>
-            <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet" />
-            <style>
-              html, body {
-                margin: 0;
-                padding: 0;
-                width: 100%;
-                height: 100%;
-                background-color: #06060e;
-                color: #dce0f8;
-                font-family: 'Rajdhani', sans-serif;
-                overflow: hidden;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                user-select: none;
-                -webkit-user-select: none;
-              }
-              #monitor-card {
-                width: 90%;
-                height: 85%;
-                display: flex;
-                flex-direction: column;
-                justify-content: center;
-                align-items: center;
-                text-align: center;
-                box-sizing: border-box;
-                border: 2px solid rgba(220, 224, 248, 0.05);
-                border-radius: 24px;
-                background: radial-gradient(circle at center, #131325 0%, #06060e 100%);
-                padding: 24px;
-              }
-              #child-label {
-                font-size: 5vw;
-                font-weight: 700;
-                color: #8888aa;
-                margin-bottom: 2vh;
-                letter-spacing: 2px;
-                text-transform: uppercase;
-                line-clamp: 2;
-                display: -webkit-box;
-                -webkit-line-clamp: 2;
-                -webkit-box-orient: vertical;
-                overflow: hidden;
-                max-width: 90%;
-              }
-              #child-time {
-                font-family: 'Share Tech Mono', monospace;
-                font-size: 14vw;
-                font-weight: bold;
-                line-height: 1;
-                transition: color 0.3s ease;
-              }
-              #child-progress-container {
-                width: 80%;
-                height: 1.5vh;
-                background: rgba(34, 34, 58, 0.4);
-                border-radius: 99px;
-                margin-top: 5vh;
-                overflow: hidden;
-                display: none;
-                border: 1px solid rgba(255,255,255,0.03);
-              }
-              #child-progress-bar {
-                height: 100%;
-                width: 0%;
-                border-radius: 99px;
-                transition: width 0.2s linear;
-              }
-            </style>
-          </head>
-          <body>
-            <div id="monitor-card">
-              <div id="child-label">ロード中...</div>
-              <div id="child-time">--:--</div>
-              <div id="child-progress-container">
-                <div id="child-progress-bar"></div>
+          const doc = extWin.document;
+          doc.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <title>Timekeeper - Monitor Display</title>
+              <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet" />
+              <style>
+                html, body {
+                  margin: 0;
+                  padding: 0;
+                  width: 100%;
+                  height: 100%;
+                  background-color: #06060e;
+                  color: #dce0f8;
+                  font-family: 'Rajdhani', sans-serif;
+                  overflow: hidden;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  user-select: none;
+                  -webkit-user-select: none;
+                }
+                #monitor-card {
+                  width: 90%;
+                  height: 85%;
+                  display: flex;
+                  flex-direction: column;
+                  justify-content: center;
+                  align-items: center;
+                  text-align: center;
+                  box-sizing: border-box;
+                  border: 2px solid rgba(220, 224, 248, 0.05);
+                  border-radius: 24px;
+                  background: radial-gradient(circle at center, #131325 0%, #06060e 100%);
+                  padding: 24px;
+                }
+                #child-label {
+                  font-size: 5vw;
+                  font-weight: 700;
+                  color: #8888aa;
+                  margin-bottom: 2vh;
+                  letter-spacing: 2px;
+                  text-transform: uppercase;
+                  line-clamp: 2;
+                  display: -webkit-box;
+                  -webkit-line-clamp: 2;
+                  -webkit-box-orient: vertical;
+                  overflow: hidden;
+                  max-width: 90%;
+                }
+                #child-time {
+                  font-family: 'Share Tech Mono', monospace;
+                  font-size: 14vw;
+                  font-weight: bold;
+                  line-height: 1;
+                  transition: color 0.3s ease;
+                }
+                #child-progress-container {
+                  width: 80%;
+                  height: 1.5vh;
+                  background: rgba(34, 34, 58, 0.4);
+                  border-radius: 99px;
+                  margin-top: 5vh;
+                  overflow: hidden;
+                  display: none;
+                  border: 1px solid rgba(255,255,255,0.03);
+                }
+                #child-progress-bar {
+                  height: 100%;
+                  width: 0%;
+                  border-radius: 99px;
+                  transition: width 0.2s linear;
+                }
+              </style>
+            </head>
+            <body>
+              <div id="monitor-card">
+                <div id="child-label">ロード中...</div>
+                <div id="child-time">--:--</div>
+                <div id="child-progress-container">
+                  <div id="child-progress-bar"></div>
+                </div>
               </div>
-            </div>
-          </body>
-          </html>
-        `);
-        doc.close();
-
-        externalWinRef.current = extWin;
+            </body>
+            </html>
+          `);
+          doc.close();
+          externalWinRef.current = extWin;
+        } catch (_) {
+          onShowBlockAlert(true);
+        }
       };
 
       const handleDragStart = (e) => {
@@ -2609,7 +2744,6 @@
 
         const relativeY = e.clientY - rect.top;
         const newWeight = relativeY / availableHeight;
-        
         setLabelWeight(Math.max(0.15, Math.min(0.85, newWeight)));
       };
 
@@ -2728,7 +2862,6 @@
       );
     }
 
-    // 横画面ビューコンポーネント
     function LandscapeView({ offsetMs, activeOutputKey, cdTargets, timers, swState, cdSteal, tmSteal, onClose }) {
       const [nowTime, setNowTime] = useState(Date.now());
       const lastTap = useRef(0);
@@ -2773,6 +2906,7 @@
       const day = dayNames[targetTime.getDay()];
 
       const timeStr = `${pad(targetTime.getHours())}:${pad(targetTime.getMinutes())}:${pad(targetTime.getSeconds())}`;
+      const virtualNow = nowTime + offsetMs;
 
       const itemInfo = (() => {
         if (!activeOutputKey) return null;
@@ -2781,7 +2915,7 @@
         if (type === "cd") {
           const item = cdTargets.find(t => t.id === id);
           if (!item) return null;
-          const remaining = item.target - Date.now() - (cdSteal > 0 ? cdSteal * 1000 : 0);
+          const remaining = item.target - virtualNow - (cdSteal > 0 ? cdSteal * 1000 : 0);
           const isPast = remaining <= 0;
           const displayMs = isPast ? Math.abs(remaining) : roundUpToSecond(remaining);
           return {
@@ -2795,15 +2929,16 @@
         if (type === "tm") {
           const timer = timers.find(t => t.id === id);
           if (!timer) return null;
-          const baseRemaining = timer.running ? Math.max(0, timer.endAt - Date.now()) : timer.remaining;
-          const offsetRemaining = tmSteal > 0 ? Math.max(0, baseRemaining - tmSteal * 1000) : baseRemaining;
-          const displayMs = timer.done ? 0 : roundUpToSecond(offsetRemaining);
+          const baseRemaining = timer.running ? (timer.endAt - virtualNow) : timer.remaining;
+          const offsetRemaining = tmSteal > 0 ? baseRemaining - (tmSteal * 1000) : baseRemaining;
+          const isOver = offsetRemaining < 0 && timer.running;
+          const displayMs = timer.done ? 0 : isOver ? offsetRemaining : roundUpToSecond(Math.max(0, offsetRemaining));
           const isNear = baseRemaining < 10000 && baseRemaining > 0 && timer.running;
           const elapsedTime = Math.max(0, timer.totalMs - baseRemaining);
 
           return {
-            display: timer.done ? "完了" : formatTime(displayMs),
-            color: timer.done ? colors.green : timer.running ? (isNear ? colors.amber : colors.blue) : colors.mutedLight,
+            display: timer.done ? "完了" : isOver ? formatTime(displayMs) : formatTime(displayMs),
+            color: timer.done ? colors.green : isOver ? colors.red : timer.running ? (isNear ? colors.amber : colors.blue) : colors.mutedLight,
             label: timer.label || "タイマー",
             subLabel: `設定: ${formatTime(timer.totalMs)} / 経過: ${formatTime(elapsedTime)}`
           };
@@ -2895,7 +3030,6 @@
       );
     }
 
-    // アプリケーション全体エントリーポイント
     function App() {
       const [currentTab, setCurrentTab] = useState("cd");
       const [timeOffset, setTimeOffset] = useState(0);
@@ -2966,6 +3100,8 @@
               clipboardVal={clipboardValue}
               stealSec={cdSteal}
               setStealSec={setCdSteal}
+              tmStealSec={tmSteal}
+              timeOffset={timeOffset}
               onOpenOutput={(id) => setActiveOutputKey({ type: "cd", id })}
             />
           </div>
@@ -2977,6 +3113,7 @@
               clipboardVal={clipboardValue}
               stealSec={tmSteal}
               setStealSec={setTmSteal} 
+              timeOffset={timeOffset}
               onOpenOutput={(id) => setActiveOutputKey({ type: "tm", id })}
             />
           </div>
@@ -3005,6 +3142,7 @@
               swState={stopwatchState}
               cdSteal={cdSteal}
               tmSteal={tmSteal}
+              timeOffset={timeOffset}
               onClose={() => setActiveOutputKey(null)}
               onShowBlockAlert={setShowBlockAlert}
             />
