@@ -888,7 +888,7 @@
             <div className="flex-1 min-w-0 pr-1">
               <div className="font-sans text-[14px] text-mutedLight mb-[1px] tracking-[0.5px] flex items-baseline gap-1.5 overflow-hidden whitespace-nowrap">
                 {item.label && <span className="text-whiteCustom font-bold overflow-hidden text-ellipsis max-w-[85px]">{item.label}</span>}
-                <span className="font-mono text-[12px] text-mutedCustom shrink-0">→ {targetTimeString}</span>
+                <span className="font-mono text-[12px] text-mutedCustom shrink-0">{targetTimeString} まで</span>
                 {steal > 0 && <span className="text-amberDim text-[11px] shrink-0">−{steal}s</span>}
                 {isPast && <span className="text-redCustom text-[11px] shrink-0 font-bold">経過</span>}
                 {isNear && !isPast && <span className="text-amberCustom text-[11px] shrink-0">⚡</span>}
@@ -1375,7 +1375,7 @@
 
       const formattedTotal = formatTime(timer.totalMs);
       const displayLabel = timer.label 
-        ? `${timer.label} → ${formattedTotal}` 
+        ? `${timer.label} [${formattedTotal}]` 
         : formattedTotal;
 
       return (
@@ -2183,13 +2183,13 @@
               </button>
               <button
                 onClick={() => setDiffMode(prev => !prev)}
-                className="absolute -bottom-2 left-1 px-[7px] py-[2px] bg-bg border rounded-[6px] text-[8px] tracking-[1px] font-mono font-bold transition-all duration-150 flex items-center gap-1 z-10 font-mono no-drag"
+                className="absolute -top-3 left-0 px-2.5 py-1 bg-bg border rounded-[7px] text-[10px] tracking-[1px] font-mono font-bold transition-all duration-150 flex items-center gap-1 z-10 font-mono no-drag"
                 style={{
                   borderColor: diffMode ? colors.amber : colors.border,
                   color: diffMode ? colors.amber : colors.muted
                 }}
               >
-                <span className="w-[6px] h-[6px] rounded-full inline-block shrink-0 transition-all duration-150"
+                <span className="w-[7px] h-[7px] rounded-full inline-block shrink-0 transition-all duration-150"
                       style={{ background: colors.amber, boxShadow: diffMode ? `0 0 5px ${colors.amber}` : 'none' }} />
                 {diffMode ? "1→2" : "#1"}
               </button>
@@ -2578,7 +2578,7 @@
           
           const formattedTotal = formatTime(timer.totalMs);
           const displayLabel = timer.label 
-            ? `${timer.label} → ${formattedTotal}` 
+            ? `${timer.label} [${formattedTotal}]` 
             : formattedTotal;
 
           const isNear = baseRemaining < 10000 && baseRemaining > 0 && timer.running;
