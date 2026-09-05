@@ -109,6 +109,8 @@
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
+    const quickLabelWords = ["番組残り", "VTR残り", "コーナー残り", "アナ締めまで"];
+
     const colors = {
       bg: '#06060e',
       surface: '#0f0f1c',
@@ -385,8 +387,12 @@
                 <div style={{ ...labelStyle, marginBottom: 14 }}>何秒早めるか設定</div>
                 <input
                   autoFocus
-                  type="tel"
+                  type="text"
                   inputMode="numeric"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value.replace(/\D/g, "").slice(0, 3))}
                   onKeyDown={(e) => e.key === "Enter" && saveOffset()}
@@ -508,13 +514,13 @@
             className="text-right cursor-pointer select-none leading-[1.2] active:opacity-70"
           >
             <div 
-              className="font-mono text-[27px] tracking-[1px] flex items-center justify-end"
+              className="font-mono text-[40px] tracking-[1px] flex items-center justify-end"
               style={{ color: offsetMs !== 0 ? colors.amber : colors.white }}
             >
               {pad(targetTime.getHours())}:{pad(targetTime.getMinutes())}:{pad(targetTime.getSeconds())}
-              {offsetMs !== 0 && <span className="text-[13px] ml-1 text-amberCustom">★</span>}
+              {offsetMs !== 0 && <span className="text-[15px] ml-1 text-amberCustom">★</span>}
             </div>
-            <div style={{ ...labelStyle, fontSize: 13, marginTop: 2 }}>
+            <div style={{ ...labelStyle, fontSize: 14, marginTop: 2 }}>
               {targetTime.toLocaleDateString("ja-JP", { month: "short", day: "numeric", weekday: "short" })}
             </div>
           </div>
@@ -531,8 +537,12 @@
                 <div style={{ ...labelStyle, marginBottom: 14 }}>時刻を手動設定</div>
                 <input
                   autoFocus
-                  type="tel"
+                  type="text"
                   inputMode="numeric"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value.replace(/\D/g, "").slice(0, 6))}
                   onKeyDown={(e) => e.key === "Enter" && saveManualTime()}
@@ -924,6 +934,7 @@
       const [showSave, setShowSave] = useState(false);
       const [anyDragging, setAnyDragging] = useState(false);
       const [labelEditItem, setLabelEditItem] = useState(null);
+      const [labelFocused, setLabelFocused] = useState(false);
 
       const inputRef = useRef(null);
       const scrollContainerRef = useRef(null);
@@ -1064,10 +1075,15 @@
             <div className="relative mb-1.5">
               <input
                 ref={inputRef}
-                type="tel"
+                type="text"
                 inputMode="numeric"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
                 value={inputVal}
                 onChange={(e) => setInputVal(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                onFocus={() => setInputVal("")}
                 onKeyDown={(e) => e.key === "Enter" && handleAddSubmit()}
                 placeholder="時刻 (例: 1430)"
                 className="bg-bg border border-border rounded-lg p-[7px_66px_7px_10px] text-amberCustom text-[19px] font-mono tracking-[3px] outline-none w-full box-border text-center animate-none"
@@ -1080,14 +1096,32 @@
             </div>
 
             <div className="flex gap-1.5">
-              <input
-                type="text"
-                value={labelVal}
-                onChange={(e) => setLabelVal(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && (showSave ? saveAsPreset() : handleAddSubmit())}
-                placeholder="ラベル（省略可）"
-                className="flex-1 bg-bg border border-border rounded-lg p-[6px_10px] text-mutedLight text-[16px] font-sans outline-none animate-none"
-              />
+              <div className="flex-1 flex flex-col gap-1 min-w-0">
+                <input
+                  type="text"
+                  value={labelVal}
+                  onChange={(e) => setLabelVal(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && (showSave ? saveAsPreset() : handleAddSubmit())}
+                  onFocus={() => setLabelFocused(true)}
+                  onBlur={() => setLabelFocused(false)}
+                  placeholder="ラベル（省略可）"
+                  autoComplete="off"
+                  className="w-full bg-bg border border-border rounded-lg p-[6px_10px] text-mutedLight text-[16px] font-sans outline-none animate-none"
+                />
+                {labelFocused && (
+                  <div className="flex gap-1 flex-wrap no-drag">
+                    {quickLabelWords.map(w => (
+                      <button
+                        key={w}
+                        onPointerDown={(e) => { e.preventDefault(); setLabelVal(w); }}
+                        className="px-2 py-[3px] bg-card border border-border rounded-full text-[9px] text-mutedLight font-sans cursor-pointer hover:border-amberCustom hover:text-amberCustom"
+                      >
+                        {w}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               {showSave ? (
                 <button
                   onClick={saveAsPreset}
@@ -1156,12 +1190,24 @@
                 <input
                   autoFocus
                   type="text"
+                  autoComplete="off"
                   value={labelEditItem.label}
                   onChange={(e) => setLabelEditItem({ ...labelEditItem, label: e.target.value })}
                   onKeyDown={(e) => e.key === "Enter" && handleSaveLabel()}
-                  className="bg-bg border border-blueCustom rounded-[10px] px-[14px] py-2.5 text-whiteCustom text-[15px] outline-none w-full box-border mb-4"
+                  className="bg-bg border border-blueCustom rounded-[10px] px-[14px] py-2.5 text-whiteCustom text-[15px] outline-none w-full box-border mb-2"
                   placeholder="ラベルを入力してください"
                 />
+                <div className="flex gap-1 flex-wrap mb-4">
+                  {quickLabelWords.map(w => (
+                    <button
+                      key={w}
+                      onPointerDown={(e) => { e.preventDefault(); setLabelEditItem({ ...labelEditItem, label: w }); }}
+                      className="px-2 py-[3px] bg-card border border-border rounded-full text-[9px] text-mutedLight font-sans cursor-pointer hover:border-amberCustom hover:text-amberCustom"
+                    >
+                      {w}
+                    </button>
+                  ))}
+                </div>
                 <div className="flex gap-2">
                   <button
                     onClick={handleSaveLabel}
@@ -1213,7 +1259,7 @@
       const swipeLimitRight = 120;
 
       const deltaMs = timer.running ? (timer.endAt - virtualNow) : timer.remaining;
-      const isOver = deltaMs < 0 && timer.running;
+      const isOver = deltaMs < 0;
       const offsetMs = steal > 0 ? deltaMs - (steal * 1000) : deltaMs;
       
       const progress = timer.totalMs > 0 ? Math.max(0, Math.min(1, deltaMs / timer.totalMs)) : 1;
@@ -1465,9 +1511,12 @@
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
+                    if (timer.running) return;
                     onUpdate({ ...timer, running: false, remaining: timer.totalMs, done: false });
                   }}
-                  className="w-full h-[36px] p-0 bg-surface border border-border rounded-[9px] text-mutedCustom text-[15px] font-sans cursor-pointer flex items-center justify-center font-sans"
+                  disabled={timer.running}
+                  className="w-full h-[36px] p-0 bg-surface border border-border rounded-[9px] text-mutedCustom text-[15px] font-sans flex items-center justify-center font-sans disabled:opacity-25"
+                  style={{ cursor: timer.running ? 'not-allowed' : 'pointer' }}
                 >
                   ↺
                 </button>
@@ -1487,7 +1536,7 @@
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      onUpdate({ ...timer, running: false, remaining: Math.max(0, deltaMs) });
+                      onUpdate({ ...timer, running: false, remaining: deltaMs });
                     }}
                     className="w-full h-[54px] rounded-lg text-[12px] font-sans font-bold tracking-[1px] cursor-pointer flex items-center justify-center font-sans"
                     style={{
@@ -1606,6 +1655,7 @@
       const [presetEditTarget, setPresetEditTarget] = useState(null);
       const [presetModalLabel, setPresetModalLabel] = useState("");
       const [presetModalInput, setPresetModalInput] = useState("");
+      const [labelFocused, setLabelFocused] = useState(false);
 
       useEffect(() => {
         if (!scrollContainerRef.current) return;
@@ -1761,16 +1811,23 @@
                   ＋ 保存
                 </button>
               </div>
-              <QuickOffsetButton value={stealSec} onChange={setStealSec} />
+              <div style={{ transform: 'translateY(10px)' }}>
+                <QuickOffsetButton value={stealSec} onChange={setStealSec} />
+              </div>
             </div>
 
             <div className="flex gap-1.5 animate-none">
               <div className="relative flex-1">
                 <input
-                  type="tel"
+                  type="text"
                   inputMode="numeric"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
                   value={customInput}
                   onChange={(e) => { setCustomInput(e.target.value.replace(/\D/g, "").slice(0, 6)); setSelectedPresetMs(0); }}
+                  onFocus={() => setCustomInput("")}
                   onKeyDown={(e) => e.key === "Enter" && createTimer()}
                   placeholder="設定値を入力"
                   className="bg-bg border border-border rounded-lg p-[8px_64px_8px_12px] text-blueCustom text-[15px] font-mono tracking-[1px] outline-none w-full box-border placeholder:text-mutedCustom/70 placeholder:text-sm placeholder:tracking-normal"
@@ -1781,14 +1838,32 @@
                   </div>
                 )}
               </div>
-              <input
-                type="text"
-                value={labelVal}
-                onChange={(e) => setLabelVal(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && createTimer()}
-                placeholder="ラベル"
-                className="w-[84px] bg-bg border border-border rounded-lg p-[6px_7px] text-mutedLight text-[16px] font-sans outline-none animate-none"
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  value={labelVal}
+                  onChange={(e) => setLabelVal(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && createTimer()}
+                  onFocus={() => setLabelFocused(true)}
+                  onBlur={() => setLabelFocused(false)}
+                  placeholder="ラベル"
+                  autoComplete="off"
+                  className="w-[84px] bg-bg border border-border rounded-lg p-[6px_7px] text-mutedLight text-[16px] font-sans outline-none animate-none"
+                />
+                {labelFocused && (
+                  <div className="absolute top-full right-0 mt-1 z-30 flex gap-1 flex-wrap w-[190px] justify-end no-drag">
+                    {quickLabelWords.map(w => (
+                      <button
+                        key={w}
+                        onPointerDown={(e) => { e.preventDefault(); setLabelVal(w); }}
+                        className="px-2 py-[3px] bg-card border border-border rounded-full text-[9px] text-mutedLight font-sans cursor-pointer hover:border-amberCustom hover:text-amberCustom"
+                      >
+                        {w}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <button
                 onClick={createTimer}
                 className="px-[13px] py-1.5 rounded-lg text-xs font-sans font-bold cursor-pointer border-none font-sans"
@@ -1870,12 +1945,24 @@
                 <input
                   autoFocus
                   type="text"
+                  autoComplete="off"
                   value={labelEditItem.label}
                   onChange={(e) => setLabelEditItem({ ...labelEditItem, label: e.target.value })}
                   onKeyDown={(e) => e.key === "Enter" && handleSaveLabel()}
-                  className="bg-bg border border-blueCustom rounded-[10px] px-[14px] py-2.5 text-whiteCustom text-[15px] outline-none w-full box-border mb-4"
+                  className="bg-bg border border-blueCustom rounded-[10px] px-[14px] py-2.5 text-whiteCustom text-[15px] outline-none w-full box-border mb-2"
                   placeholder="ラベルを入力してください"
                 />
+                <div className="flex gap-1 flex-wrap mb-4">
+                  {quickLabelWords.map(w => (
+                    <button
+                      key={w}
+                      onPointerDown={(e) => { e.preventDefault(); setLabelEditItem({ ...labelEditItem, label: w }); }}
+                      className="px-2 py-[3px] bg-card border border-border rounded-full text-[9px] text-mutedLight font-sans cursor-pointer hover:border-amberCustom hover:text-amberCustom"
+                    >
+                      {w}
+                    </button>
+                  ))}
+                </div>
                 <div className="flex gap-2">
                   <button
                     onClick={handleSaveLabel}
@@ -1910,8 +1997,12 @@
                 <label className="text-[10px] text-mutedLight tracking-[1px] mb-1 block">設定時間 (例: 0500 → 5分)</label>
                 <input
                   autoFocus
-                  type="tel"
+                  type="text"
                   inputMode="numeric"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
                   value={presetModalInput}
                   onChange={(e) => setPresetModalInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
                   placeholder="0300"
@@ -1921,6 +2012,7 @@
                 <label className="text-[10px] text-mutedLight tracking-[1px] mb-1 block">プリセット名称</label>
                 <input
                   type="text"
+                  autoComplete="off"
                   value={presetModalLabel}
                   onChange={(e) => setPresetModalLabel(e.target.value)}
                   placeholder={parsedPresetModal ? parsedPresetModal.str : "3分"}
@@ -2057,19 +2149,6 @@
               RST
             </button>
 
-            <button
-              onClick={() => setDiffMode(prev => !prev)}
-              className="absolute top-2 right-2.5 px-[9px] py-[3px] bg-transparent border rounded-[6px] text-mutedCustom text-[9px] tracking-[1px] font-mono font-bold transition-all duration-150 flex items-center gap-1 font-mono"
-              style={{
-                borderColor: diffMode ? colors.amber : colors.border,
-                color: diffMode ? colors.amber : colors.muted
-              }}
-            >
-              <span className="w-[7px] h-[7px] rounded-full inline-block shrink-0 transition-all duration-150"
-                    style={{ background: colors.amber, boxShadow: diffMode ? `0 0 5px ${colors.amber}` : 'none' }} />
-              {diffMode ? "1→2" : "#1"}
-            </button>
-
             <div 
               className="pt-[22px] cursor-pointer"
               onPointerUp={() => {
@@ -2082,25 +2161,39 @@
                 }
               }}
             >
-              <div className="font-mono text-[44px] tracking-[2px] leading-none transition-colors duration-300"
+              <div className="font-mono text-[15vw] sm:text-[64px] tracking-[1px] leading-none transition-colors duration-300"
                    style={{ color: running ? colors.green : currentLapTime > 0 ? colors.amber : colors.white }}>
                 {isLapShort ? formatTimeMs(currentLapTime) : formatTime(currentLapTime)}
               </div>
-              <div className="font-mono text-[11px] text-mutedCustom mt-1.2 tracking-[1px]">
+              <div className="font-mono text-[12px] text-mutedCustom mt-1.5 tracking-[1px]">
                 TOTAL{laps.length > 0 ? `  Lap ${laps.length + 1}` : ""}  /  {isTotalShort ? formatTimeMs(elapsed) : formatTime(elapsed)}
               </div>
             </div>
           </div>
 
           <div className="flex gap-2 shrink-0">
-            <button
-              onClick={recordLap1}
-              disabled={!running && elapsed === 0}
-              className="flex-1 py-2.5 bg-card border border-border rounded-[10px] text-whiteCustom text-[11px] tracking-[1px] font-mono font-bold cursor-pointer leading-[1.3] disabled:opacity-40 font-mono"
-            >
-              <div>LAP1</div>
-              <div className="text-[9px] text-mutedCustom mt-[2px] font-sans">{diffMode ? "差分" : "分割"}</div>
-            </button>
+            <div className="flex-1 relative">
+              <button
+                onClick={recordLap1}
+                disabled={!running && elapsed === 0}
+                className="w-full py-2.5 bg-card border border-border rounded-[10px] text-whiteCustom text-[11px] tracking-[1px] font-mono font-bold cursor-pointer leading-[1.3] disabled:opacity-40 font-mono"
+              >
+                <div>LAP1</div>
+                <div className="text-[9px] text-mutedCustom mt-[2px] font-sans">{diffMode ? "差分" : "分割"}</div>
+              </button>
+              <button
+                onClick={() => setDiffMode(prev => !prev)}
+                className="absolute -bottom-2 left-1 px-[7px] py-[2px] bg-bg border rounded-[6px] text-[8px] tracking-[1px] font-mono font-bold transition-all duration-150 flex items-center gap-1 z-10 font-mono no-drag"
+                style={{
+                  borderColor: diffMode ? colors.amber : colors.border,
+                  color: diffMode ? colors.amber : colors.muted
+                }}
+              >
+                <span className="w-[6px] h-[6px] rounded-full inline-block shrink-0 transition-all duration-150"
+                      style={{ background: colors.amber, boxShadow: diffMode ? `0 0 5px ${colors.amber}` : 'none' }} />
+                {diffMode ? "1→2" : "#1"}
+              </button>
+            </div>
 
             <button
               onClick={toggleRun}
@@ -2408,11 +2501,25 @@
       );
     }
 
-    function FloatingOutput({ sourceKey, cdTargets, timers, swState, cdSteal, tmSteal, onClose, onShowBlockAlert, timeOffset = 0 }) {
-      const [position, setPosition] = useState({ x: 16, y: 80 });
-      const [size, setSize] = useState({ w: 240, h: 140 }); 
+    function FloatingOutput({ sourceKey, cdTargets, timers, swState, cdSteal, tmSteal, onClose, onShowBlockAlert, timeOffset = 0, anchorRef }) {
+      const defaultFloatSize = { w: 200, h: 92 };
+
+      const [position, setPosition] = useState(() => {
+        try {
+          const rect = anchorRef && anchorRef.current ? anchorRef.current.getBoundingClientRect() : null;
+          if (rect) {
+            return {
+              x: Math.max(4, rect.right - defaultFloatSize.w),
+              y: rect.bottom + 6
+            };
+          }
+        } catch (_) {}
+        return { x: 16, y: 80 };
+      });
+      const [size, setSize] = useState(defaultFloatSize); 
       const [showCloseBtn, setShowCloseBtn] = useState(false);
       const [labelWeight, setLabelWeight] = useState(0.35);
+      const [isFullscreen, setIsFullscreen] = useState(false);
 
       const isDragActive = useRef(false);
       const dragStartOffset = useRef({ x: 0, y: 0 });
@@ -2465,7 +2572,7 @@
           if (!timer) return { display: "–:–", color: colors.muted, label: "–", progress: 0 };
           const baseRemaining = timer.running ? (timer.endAt - virtualNow) : timer.remaining;
           const offsetRemaining = tmSteal > 0 ? baseRemaining - (tmSteal * 1000) : baseRemaining;
-          const isOver = offsetRemaining < 0 && timer.running;
+          const isOver = offsetRemaining < 0;
           const displayMs = timer.done ? 0 : isOver ? offsetRemaining : roundUpToSecond(Math.max(0, offsetRemaining));
           const progress = timer.totalMs > 0 ? Math.max(0, Math.min(1, baseRemaining / timer.totalMs)) : 1;
           
@@ -2760,7 +2867,43 @@
       const timeHeight = contentH * (1 - labelWeight);
 
       const labelFontSize = Math.max(12, Math.min(labelHeight * 0.45, size.w * 0.14));
-      const timeFontSize = Math.max(16, Math.min(timeHeight * 0.72, size.w * 0.23));
+      const timeCharCount = Math.max(4, String(itemInfo.display).length);
+      const timeAvailableW = Math.max(20, size.w - 32);
+      const timeFontSize = Math.max(16, Math.min(timeHeight * 0.72, timeAvailableW / (timeCharCount * 0.62)));
+
+      if (isFullscreen) {
+        return (
+          <div
+            className="fixed inset-0 z-[450] bg-bg select-none touch-none flex flex-col items-center justify-center"
+            onPointerUp={(e) => {
+              e.stopPropagation();
+              const now = Date.now();
+              if (now - lastTapTime.current < 350) {
+                lastTapTime.current = 0;
+                setIsFullscreen(false);
+              } else {
+                lastTapTime.current = now;
+              }
+            }}
+          >
+            <div
+              className="font-sans font-bold leading-tight break-all text-center px-6 mb-3"
+              style={{ fontSize: 'min(7vw, 34px)', color: colors.whiteCustom, textShadow: `0 0 8px rgba(220,224,248,0.2)` }}
+            >
+              {itemInfo.label}
+            </div>
+            <div
+              className="font-mono font-bold tracking-[1px] leading-none text-center px-4"
+              style={{ fontSize: '20vw', color: itemInfo.color, textShadow: `0 0 30px ${itemInfo.color}55` }}
+            >
+              {itemInfo.display}
+            </div>
+            <div className="text-[10px] text-mutedCustom tracking-[3px] mt-8 opacity-35 uppercase font-sans">
+              ダブルタップで元の表示に戻る
+            </div>
+          </div>
+        );
+      }
 
       return (
         <div
@@ -2779,6 +2922,19 @@
             height: size.h,
           }}
         >
+          {showCloseBtn && (
+            <div className="absolute top-2 left-2 flex gap-1.5 z-[100] no-drag">
+              <button
+                onPointerDown={(e) => { e.stopPropagation(); setIsFullscreen(true); }}
+                title="全画面表示"
+                className="w-6 h-6 bg-black/80 hover:bg-cyanCustom border border-cyanCustom/60 rounded-full text-cyanCustom hover:text-bg text-xs font-bold cursor-pointer flex items-center justify-center transition-all active:scale-90 font-sans"
+                style={{ boxShadow: `0 0 8px ${colors.cyanGlow}` }}
+              >
+                ⛶
+              </button>
+            </div>
+          )}
+
           {showCloseBtn && (
             <div className="absolute top-2 right-2 flex gap-1.5 z-[100] no-drag">
               <button
@@ -2931,7 +3087,7 @@
           if (!timer) return null;
           const baseRemaining = timer.running ? (timer.endAt - virtualNow) : timer.remaining;
           const offsetRemaining = tmSteal > 0 ? baseRemaining - (tmSteal * 1000) : baseRemaining;
-          const isOver = offsetRemaining < 0 && timer.running;
+          const isOver = offsetRemaining < 0;
           const displayMs = timer.done ? 0 : isOver ? offsetRemaining : roundUpToSecond(Math.max(0, offsetRemaining));
           const isNear = baseRemaining < 10000 && baseRemaining > 0 && timer.running;
           const elapsedTime = Math.max(0, timer.totalMs - baseRemaining);
@@ -3051,6 +3207,7 @@
       const [showBlockAlert, setShowBlockAlert] = useState(false);
 
       const blockClockUntilRef = useRef(0);
+      const headerClockRef = useRef(null);
 
       const tabItems = [
         { id: "cd", label: "CD", icon: "⏰" },
@@ -3060,7 +3217,7 @@
       ];
 
       return (
-        <div className="h-[100vh] bg-bg text-white font-sans max-w-[430px] mx-auto flex flex-col overflow-hidden select-none">
+        <div className="h-full bg-bg text-white font-sans max-w-[430px] mx-auto flex flex-col overflow-hidden select-none">
           <div className="flex justify-between items-center p-2 border-b border-border bg-bg shrink-0 z-50">
             <div className="flex gap-1">
               {tabItems.map(tab => {
@@ -3084,12 +3241,14 @@
               })}
             </div>
             
-            <HeaderClock 
-              offsetMs={timeOffset} 
-              setOffsetMs={setTimeOffset} 
-              onDoubleTap={() => setIsLandscape(true)}
-              blockUntilRef={blockClockUntilRef}
-            />
+            <div ref={headerClockRef}>
+              <HeaderClock 
+                offsetMs={timeOffset} 
+                setOffsetMs={setTimeOffset} 
+                onDoubleTap={() => setIsLandscape(true)}
+                blockUntilRef={blockClockUntilRef}
+              />
+            </div>
           </div>
 
           <div className="flex-1 min-h-0 overflow-hidden flex flex-col" style={{ display: currentTab === "cd" ? "flex" : "none" }}>
@@ -3145,6 +3304,7 @@
               timeOffset={timeOffset}
               onClose={() => setActiveOutputKey(null)}
               onShowBlockAlert={setShowBlockAlert}
+              anchorRef={headerClockRef}
             />
           )}
 
