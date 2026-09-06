@@ -728,10 +728,10 @@
           onPointerCancel={handlePointerCancel}
           onPointerLeave={handlePointerCancel}
           onContextMenu={(e) => e.preventDefault()}
-          className="px-2.5 py-1 bg-card border border-amberCustom rounded-[20px] text-amberCustom text-[11px] font-sans font-semibold cursor-pointer tracking-[0.5px] select-none no-drag animate-none shrink-0"
+          className="px-2.5 py-1 bg-card border border-amberCustom rounded-[20px] cursor-pointer tracking-[0.5px] select-none no-drag animate-none shrink-0"
         >
-          {preset.label}
-          <span className="text-amberDim ml-1 text-[10px]">{preset.str}</span>
+          <span className="text-mutedLight text-[9px] font-sans opacity-70">{preset.label}</span>
+          <span className="text-amberCustom ml-1 text-[13px] font-mono font-bold">{preset.str}</span>
         </button>
       );
     }
@@ -1938,7 +1938,8 @@
             boxShadow: isSelected ? `0 0 10px rgba(96,168,255,0.7)` : 'none'
           }}
         >
-          {preset.l}
+          <span style={{ color: isSelected ? colors.blueCustom : colors.mutedLight, opacity: 0.7 }} className="text-[9px] font-sans">{preset.l}</span>
+          <span className="ml-1 text-[13px] font-mono font-bold" style={{ color: colors.blueCustom }}>{formatTime(preset.ms)}</span>
         </button>
       );
     }
