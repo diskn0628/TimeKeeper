@@ -1213,11 +1213,17 @@
 
       return (
         <div className="h-full flex flex-col p-[8px_10px] gap-1 overflow-hidden">
-          <div className="shrink-0 no-drag">
+          <div className="bg-card rounded-xl p-[8px_10px] border border-border shrink-0 no-drag">
+            {/* 1. 2秒盗みボタン */}
+            <div className="mb-1.5">
+              <QuickOffsetButton value={stealSec} onChange={setStealSec} />
+            </div>
+
+            {/* 2. タイムショートカット */}
             <div style={{ ...labelStyle, fontSize: 8, marginBottom: 4 }}>
               プリセット <span className="opacity-40">長押しで編集</span>
             </div>
-            <div className="flex gap-[5px] overflow-x-auto pb-1 no-scrollbar">
+            <div className="flex gap-[5px] overflow-x-auto pb-1 mb-1.5 no-scrollbar">
               {presets.map((p, idx) => (
                 <PresetKey 
                   key={p.id} 
@@ -1234,15 +1240,9 @@
                 ＋
               </button>
             </div>
-          </div>
 
-          <div className="bg-card rounded-xl p-[8px_10px] border border-border shrink-0 no-drag">
-            <div className="flex items-center gap-2 mb-1">
-              <div style={{ ...labelStyle, fontSize: 8 }}>時刻追加</div>
-              <QuickOffsetButton value={stealSec} onChange={setStealSec} />
-            </div>
-
-            <div className="relative mb-1">
+            {/* 3. 時間入力(コンパクト・主役・リアルタイムプレビュー) */}
+            <div className="relative w-[145px] mb-1.5">
               <input
                 ref={inputRef}
                 type="text"
@@ -1259,8 +1259,8 @@
                 onChange={(e) => setInputVal(e.target.value.replace(/\D/g, "").slice(0, 6))}
                 onFocus={() => setInputVal("")}
                 onKeyDown={(e) => e.key === "Enter" && handleAddSubmit()}
-                placeholder="時刻 (例: 1430)"
-                className="bg-bg border border-border rounded-lg p-[6px_60px_6px_8px] text-amberCustom text-[18px] font-mono tracking-[2px] outline-none w-full box-border text-center animate-none"
+                placeholder="1430"
+                className="bg-bg border-[1.5px] border-amberCustom rounded-lg p-[8px_44px_8px_10px] text-amberCustom text-[20px] font-mono tracking-[2px] outline-none w-full box-border animate-none"
               />
               {parsedInput && (
                 <div className="absolute right-2.5 top-1/2 -translate-y-1/2 font-mono text-[10px] text-amberDim pointer-events-none animate-none">
@@ -1269,6 +1269,7 @@
               )}
             </div>
 
+            {/* 4. ラベル入力 */}
             <div className="flex gap-1.5 mb-1.5">
               <input
                 type="text"
@@ -1300,7 +1301,7 @@
               </button>
             </div>
 
-            {/* ラベル簡単入力（一列・横スクロール & 長押し編集対応） */}
+            {/* 5. ラベルショートカット */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar no-drag">
               <span className="text-[8px] text-mutedCustom whitespace-nowrap">長押し編集:</span>
               {quickWords.map((w, idx) => (
@@ -2139,59 +2140,63 @@
       return (
         <div className="h-full flex flex-col p-[8px_10px] gap-1 overflow-hidden">
           <div className="bg-card rounded-xl p-[8px_10px] border border-border shrink-0 no-drag">
-            {/* 盗みボタンを左側に配置して右上の別ウィンドウタイマーとの被りを解消 */}
-            <div className="flex items-center gap-1.5 mb-1.5 overflow-x-auto no-scrollbar">
+            {/* 1. 2秒盗みボタン */}
+            <div className="mb-1.5">
               <QuickOffsetButton value={stealSec} onChange={setStealSec} />
-              <div className="w-[1px] h-3.5 bg-border/60 shrink-0" />
-              <div className="flex gap-[4px] items-center shrink-0">
-                {presets.map((p, idx) => {
-                  const isSelected = selectedPresetMs === p.ms && !customInput;
-                  return (
-                    <CustomPresetButton
-                      key={idx}
-                      preset={p}
-                      isSelected={isSelected}
-                      onTap={() => { addTimerDirect(p.ms, p.l); }} 
-                      onLongPress={() => openEditPresetDialog(p, idx)}
-                      onLongPressEnd={() => tmPresetModalInputRef.current?.focus()}
-                    />
-                  );
-                })}
-                <button
-                  onClick={openNewPresetDialog}
-                  className="px-2 py-1 border border-dashed border-mutedCustom rounded-[7px] text-[10px] text-mutedCustom font-sans font-bold cursor-pointer shrink-0"
-                >
-                  ＋
-                </button>
-              </div>
             </div>
 
+            {/* 2. タイムショートカット */}
+            <div className="flex gap-[4px] items-center overflow-x-auto pb-1 mb-1.5 no-scrollbar">
+              {presets.map((p, idx) => {
+                const isSelected = selectedPresetMs === p.ms && !customInput;
+                return (
+                  <CustomPresetButton
+                    key={idx}
+                    preset={p}
+                    isSelected={isSelected}
+                    onTap={() => { addTimerDirect(p.ms, p.l); }} 
+                    onLongPress={() => openEditPresetDialog(p, idx)}
+                    onLongPressEnd={() => tmPresetModalInputRef.current?.focus()}
+                  />
+                );
+              })}
+              <button
+                onClick={openNewPresetDialog}
+                className="px-2 py-1 border border-dashed border-mutedCustom rounded-[7px] text-[10px] text-mutedCustom font-sans font-bold cursor-pointer shrink-0"
+              >
+                ＋
+              </button>
+            </div>
+
+            {/* 3. 時間入力(コンパクト・主役・リアルタイムプレビュー) */}
+            <div className="relative w-[145px] mb-1.5">
+              <input
+                type="text"
+                name="tm-custom-duration"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                data-form-type="other"
+                data-lpignore="true"
+                value={customInput}
+                onChange={(e) => { setCustomInput(e.target.value.replace(/\D/g, "").slice(0, 6)); setSelectedPresetMs(0); }}
+                onFocus={() => setCustomInput("")}
+                onKeyDown={(e) => e.key === "Enter" && createTimer()}
+                placeholder="0300"
+                className="bg-bg border-[1.5px] border-blueCustom rounded-lg p-[8px_44px_8px_10px] text-blueCustom text-[20px] font-mono tracking-[2px] outline-none w-full box-border"
+              />
+              {parsedCustom && (
+                <div className="absolute right-2.5 top-1/2 -translate-y-1/2 font-mono text-[10px] text-blueCustom opacity-50 pointer-events-none">
+                  {parsedCustom.str}
+                </div>
+              )}
+            </div>
+
+            {/* 4. ラベル入力 */}
             <div className="flex gap-1.5 mb-1.5">
-              <div className="relative flex-1">
-                <input
-                  type="text"
-                  name="tm-custom-duration"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  data-form-type="other"
-                  data-lpignore="true"
-                  value={customInput}
-                  onChange={(e) => { setCustomInput(e.target.value.replace(/\D/g, "").slice(0, 6)); setSelectedPresetMs(0); }}
-                  onFocus={() => setCustomInput("")}
-                  onKeyDown={(e) => e.key === "Enter" && createTimer()}
-                  placeholder="設定値 (例: 0300)"
-                  className="bg-bg border border-border rounded-lg p-[6px_52px_6px_8px] text-blueCustom text-[15px] font-mono tracking-[1px] outline-none w-full box-border"
-                />
-                {parsedCustom && (
-                  <div className="absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[9px] text-blueCustom opacity-50 pointer-events-none">
-                    {parsedCustom.str}
-                  </div>
-                )}
-              </div>
               <input
                 type="text"
                 name="tm-item-label"
@@ -2207,7 +2212,7 @@
                 spellCheck={false}
                 data-form-type="other"
                 data-lpignore="true"
-                className="w-[90px] bg-bg border border-border rounded-lg p-[6px_8px] text-mutedLight text-[14px] font-sans outline-none"
+                className="flex-1 min-w-0 bg-bg border border-border rounded-lg p-[6px_8px] text-mutedLight text-[14px] font-sans outline-none"
               />
               <button
                 onClick={createTimer}
@@ -2221,6 +2226,7 @@
               </button>
             </div>
 
+            {/* 5. ラベルショートカット */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar no-drag">
               <span className="text-[8px] text-mutedCustom whitespace-nowrap">長押し編集:</span>
               {quickWords.map((w, idx) => (
@@ -3015,7 +3021,8 @@
             display: (isPast ? "+" : "") + formatTime(displayMs),
             color: isPast ? colors.red : (remaining > 0 && remaining < 60000) ? colors.amber : colors.white,
             label: item.label || new Date(item.target).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-            progress: 0
+            progress: 0,
+            stealAmount: cdSteal > 0 ? cdSteal : 0
           };
         }
 
@@ -3039,7 +3046,8 @@
             display: timer.done ? "完了" : isOver ? formatTime(displayMs) : formatTime(displayMs),
             color: timer.done ? colors.green : isOver ? colors.red : timer.running ? (isNear ? colors.amber : colors.blue) : colors.mutedLight,
             label: displayLabel,
-            progress: progress
+            progress: progress,
+            stealAmount: tmSteal > 0 ? tmSteal : 0
           };
         }
 
@@ -3058,12 +3066,21 @@
         const extWin = externalWinRef.current;
         if (extWin && !extWin.closed) {
           try {
-            const labelEl = extWin.document.getElementById('child-label');
+            const labelEl = extWin.document.getElementById('child-label-text');
+            const stealBadgeEl = extWin.document.getElementById('child-steal-badge');
             const timeEl = extWin.document.getElementById('child-time');
             const progContainer = extWin.document.getElementById('child-progress-container');
             const progBar = extWin.document.getElementById('child-progress-bar');
 
             if (labelEl) labelEl.textContent = itemInfo.label;
+            if (stealBadgeEl) {
+              if (itemInfo.stealAmount > 0) {
+                stealBadgeEl.textContent = `−${itemInfo.stealAmount}秒`;
+                stealBadgeEl.style.display = 'inline-block';
+              } else {
+                stealBadgeEl.style.display = 'none';
+              }
+            }
             if (timeEl) {
               timeEl.textContent = itemInfo.display;
               timeEl.style.color = itemInfo.color;
@@ -3153,10 +3170,18 @@
                   padding: 24px;
                 }
                 #child-label {
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  gap: 0.4em;
+                  flex-wrap: wrap;
+                  margin-bottom: 2vh;
+                  max-width: 90%;
+                }
+                #child-label-text {
                   font-size: 5vw;
                   font-weight: 700;
                   color: #8888aa;
-                  margin-bottom: 2vh;
                   letter-spacing: 2px;
                   text-transform: uppercase;
                   line-clamp: 2;
@@ -3164,7 +3189,17 @@
                   -webkit-line-clamp: 2;
                   -webkit-box-orient: vertical;
                   overflow: hidden;
-                  max-width: 90%;
+                }
+                #child-steal-badge {
+                  display: none;
+                  font-size: 5vw;
+                  font-weight: 700;
+                  letter-spacing: 1px;
+                  color: #f0a030;
+                  border: 2px solid #f0a030;
+                  border-radius: 0.2em;
+                  padding: 0 0.3em;
+                  white-space: nowrap;
                 }
                 #child-time {
                   font-family: 'Share Tech Mono', monospace;
@@ -3193,7 +3228,10 @@
             </head>
             <body>
               <div id="monitor-card">
-                <div id="child-label">ロード中...</div>
+                <div id="child-label">
+                  <span id="child-label-text">ロード中...</span>
+                  <span id="child-steal-badge"></span>
+                </div>
                 <div id="child-time">--:--</div>
                 <div id="child-progress-container">
                   <div id="child-progress-bar"></div>
@@ -3406,7 +3444,7 @@
 
           {/* ラベル領域（最小限） */}
           <div 
-            className="w-full flex items-center justify-center px-2 pt-0.5 overflow-hidden text-center"
+            className="w-full flex items-center justify-center gap-1.5 px-2 pt-0.5 overflow-hidden text-center"
             style={{ height: labelHeight }}
           >
             <div 
@@ -3418,6 +3456,19 @@
             >
               {itemInfo.label}
             </div>
+            {itemInfo.stealAmount > 0 && (
+              <div
+                className="font-mono font-bold leading-none whitespace-nowrap shrink-0 rounded"
+                style={{
+                  fontSize: labelFontSize,
+                  color: colors.amber,
+                  border: `1.5px solid ${colors.amber}`,
+                  padding: "0.05em 0.35em"
+                }}
+              >
+                −{itemInfo.stealAmount}秒
+              </div>
+            )}
           </div>
 
           <div
