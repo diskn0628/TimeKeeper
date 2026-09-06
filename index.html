@@ -333,6 +333,28 @@
       }, [mode, isPageVisible]);
     }
 
+    // キーボードが出た時、実際に見えている範囲(訪問ビューポート)にモーダルの表示位置を合わせるフック
+    function useKeyboardSafeViewport(active) {
+      const [rect, setRect] = useState({ top: 0, height: window.innerHeight });
+
+      useEffect(() => {
+        if (!active) return;
+        const vv = window.visualViewport;
+        if (!vv) return;
+
+        const update = () => setRect({ top: vv.offsetTop, height: vv.height });
+        update();
+        vv.addEventListener("resize", update);
+        vv.addEventListener("scroll", update);
+        return () => {
+          vv.removeEventListener("resize", update);
+          vv.removeEventListener("scroll", update);
+        };
+      }, [active]);
+
+      return rect;
+    }
+
     function QuickLabelChip({ word, onSelect, onLongPress }) {
       const timerRef = useRef(null);
       const isLongPress = useRef(false);
@@ -343,13 +365,15 @@
         timerRef.current = setTimeout(() => {
           isLongPress.current = true;
           if (navigator.vibrate) navigator.vibrate(40);
-          onLongPress(word);
         }, 500);
       };
 
       const handlePointerUp = () => {
         clearTimeout(timerRef.current);
-        if (!isLongPress.current) {
+        if (isLongPress.current) {
+          // 指を離した瞬間(本物のタップ扱い)に編集モーダルを開く
+          onLongPress(word);
+        } else {
           onSelect(word);
         }
       };
@@ -1041,6 +1065,9 @@
 
       const inputRef = useRef(null);
       const scrollContainerRef = useRef(null);
+      const wordModalInputRef = useRef(null);
+
+      const wordModalViewport = useKeyboardSafeViewport(wordEditTarget !== null);
 
       useLowPowerTrigger(targets.length > 0 || timers.some(t => t.running) ? "low" : "none");
 
@@ -1274,8 +1301,11 @@
                   word={w}
                   onSelect={(word) => setLabelVal(word)}
                   onLongPress={() => {
-                    setWordEditTarget(idx);
-                    setWordEditInput(w);
+                    ReactDOM.flushSync(() => {
+                      setWordEditTarget(idx);
+                      setWordEditInput(w);
+                    });
+                    wordModalInputRef.current?.focus();
                   }}
                 />
               ))}
@@ -1372,7 +1402,12 @@
           {/* 簡単入力単語 自体の上書き編集モーダル */}
           {wordEditTarget !== null && (
             <div 
-              className="fixed inset-0 z-[600] bg-black/90 backdrop-blur-[6px] flex items-start justify-center pt-[14vh] p-4"
+              className="fixed inset-x-0 z-[600] bg-black/90 backdrop-blur-[6px] flex items-start justify-center p-4"
+              style={{
+                top: wordModalViewport.top,
+                height: wordModalViewport.height,
+                paddingTop: Math.round(wordModalViewport.height * 0.14)
+              }}
               onClick={() => setWordEditTarget(null)}
             >
               <div 
@@ -1382,6 +1417,7 @@
                 <div style={{ ...labelStyle, marginBottom: 10 }}>定型ボタンの文言を変更</div>
                 <input
                   autoFocus
+                  ref={wordModalInputRef}
                   type="text"
                   name="edit-quick-word"
                   autoComplete="off"
@@ -1427,7 +1463,7 @@
                   {presetEditTarget ? "プリセットを編集" : "プリセットを登録"}
                 </div>
 
-                <label className="text-[9px] text-mutedLight tracking-[1px] mb-1 block">時刻 (例: 1430)</label>
+                <label className="text-[9px] text-mutedLight tracking-[1px] mb-1 block">時刻 (例: 143000 → 14時30分00秒)</label>
                 <input
                   autoFocus
                   type="text"
@@ -1442,7 +1478,7 @@
                   data-lpignore="true"
                   value={presetModalInput}
                   onChange={(e) => setPresetModalInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  placeholder="1430"
+                  placeholder="143000"
                   className="bg-bg border border-amberCustom rounded-[10px] px-[12px] py-2 text-amberCustom text-[18px] font-mono tracking-[3px] outline-none w-full box-border mb-2.5 text-center animate-none"
                 />
 
@@ -1450,6 +1486,8 @@
                 <input
                   type="text"
                   name="cd-preset-title"
+                  readOnly
+                  onFocus={(e) => e.target.removeAttribute("readonly")}
                   autoComplete="off"
                   autoCorrect="off"
                   autoCapitalize="none"
@@ -1459,8 +1497,20 @@
                   value={presetModalLabel}
                   onChange={(e) => setPresetModalLabel(e.target.value)}
                   placeholder={parsedPresetModal ? parsedPresetModal.str : "ラベル（省略可）"}
-                  className="bg-bg border border-border rounded-[10px] px-[12px] py-2 text-whiteCustom text-[14px] outline-none w-full box-border mb-3 text-center animate-none"
+                  className="bg-bg border border-border rounded-[10px] px-[12px] py-2 text-whiteCustom text-[14px] outline-none w-full box-border mb-2 text-center animate-none"
                 />
+                <div className="flex gap-1 overflow-x-auto pb-2 mb-3 no-scrollbar">
+                  {quickWords.map((w, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onPointerDown={(e) => { e.preventDefault(); setPresetModalLabel(w); }}
+                      className="px-2 py-[3px] bg-surface border border-border rounded-full text-[9px] text-mutedLight font-sans cursor-pointer whitespace-nowrap shrink-0 hover:border-amberCustom hover:text-amberCustom"
+                    >
+                      {w}
+                    </button>
+                  ))}
+                </div>
 
                 <div className="flex gap-2">
                   <button
@@ -1905,6 +1955,9 @@
       const [wordEditInput, setWordEditInput] = useState("");
 
       const scrollContainerRef = useRef(null);
+      const tmWordModalInputRef = useRef(null);
+
+      const tmWordModalViewport = useKeyboardSafeViewport(wordEditTarget !== null);
 
       const isAnyTimerRunning = timers.some(t => t.running);
       useLowPowerTrigger(isAnyTimerRunning ? "low" : "none");
@@ -2162,8 +2215,11 @@
                   word={w}
                   onSelect={(word) => setLabelVal(word)}
                   onLongPress={() => {
-                    setWordEditTarget(idx);
-                    setWordEditInput(w);
+                    ReactDOM.flushSync(() => {
+                      setWordEditTarget(idx);
+                      setWordEditInput(w);
+                    });
+                    tmWordModalInputRef.current?.focus();
                   }}
                 />
               ))}
@@ -2285,7 +2341,12 @@
           {/* 簡単入力単語 自体の上書き編集モーダル */}
           {wordEditTarget !== null && (
             <div 
-              className="fixed inset-0 z-[600] bg-black/90 backdrop-blur-[6px] flex items-start justify-center pt-[14vh] p-4"
+              className="fixed inset-x-0 z-[600] bg-black/90 backdrop-blur-[6px] flex items-start justify-center p-4"
+              style={{
+                top: tmWordModalViewport.top,
+                height: tmWordModalViewport.height,
+                paddingTop: Math.round(tmWordModalViewport.height * 0.14)
+              }}
               onClick={() => setWordEditTarget(null)}
             >
               <div 
@@ -2295,6 +2356,7 @@
                 <div style={{ ...labelStyle, marginBottom: 10 }}>定型ボタンの文言を変更</div>
                 <input
                   autoFocus
+                  ref={tmWordModalInputRef}
                   type="text"
                   name="edit-quick-word-tm"
                   autoComplete="off"
@@ -2363,6 +2425,8 @@
                 <input
                   type="text"
                   name="tm-preset-title"
+                  readOnly
+                  onFocus={(e) => e.target.removeAttribute("readonly")}
                   autoComplete="off"
                   autoCorrect="off"
                   autoCapitalize="none"
@@ -2372,8 +2436,20 @@
                   value={presetModalLabel}
                   onChange={(e) => setPresetModalLabel(e.target.value)}
                   placeholder={parsedPresetModal ? parsedPresetModal.str : "3分"}
-                  className="bg-bg border border-border rounded-[10px] px-[12px] py-2 text-whiteCustom text-[14px] outline-none w-full box-border mb-3 text-center animate-none"
+                  className="bg-bg border border-border rounded-[10px] px-[12px] py-2 text-whiteCustom text-[14px] outline-none w-full box-border mb-2 text-center animate-none"
                 />
+                <div className="flex gap-1 overflow-x-auto pb-2 mb-3 no-scrollbar">
+                  {quickWords.map((w, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onPointerDown={(e) => { e.preventDefault(); setPresetModalLabel(w); }}
+                      className="px-2 py-[3px] bg-surface border border-border rounded-full text-[9px] text-mutedLight font-sans cursor-pointer whitespace-nowrap shrink-0 hover:border-amberCustom hover:text-amberCustom"
+                    >
+                      {w}
+                    </button>
+                  ))}
+                </div>
 
                 <div className="flex gap-2">
                   <button
