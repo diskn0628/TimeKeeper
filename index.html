@@ -1241,36 +1241,34 @@
               </button>
             </div>
 
-            {/* 3. 時間入力(コンパクト・主役・リアルタイムプレビュー) */}
-            <div className="relative w-[145px] mb-1.5">
-              <input
-                ref={inputRef}
-                type="text"
-                name="cd-target-digits"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="none"
-                spellCheck={false}
-                data-form-type="other"
-                data-lpignore="true"
-                value={inputVal}
-                onChange={(e) => setInputVal(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                onFocus={() => setInputVal("")}
-                onKeyDown={(e) => e.key === "Enter" && handleAddSubmit()}
-                placeholder="1430"
-                className="bg-bg border-[1.5px] border-amberCustom rounded-lg p-[8px_44px_8px_10px] text-amberCustom text-[20px] font-mono tracking-[2px] outline-none w-full box-border animate-none"
-              />
-              {parsedInput && (
-                <div className="absolute right-2.5 top-1/2 -translate-y-1/2 font-mono text-[10px] text-amberDim pointer-events-none animate-none">
-                  {parsedInput.str}
-                </div>
-              )}
-            </div>
-
-            {/* 4. ラベル入力 */}
+            {/* 3+4. 時間入力(コンパクト・主役・リアルタイムプレビュー) + ラベル入力 */}
             <div className="flex gap-1.5 mb-1.5">
+              <div className="relative w-[145px] shrink-0">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  name="cd-target-digits"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  data-form-type="other"
+                  data-lpignore="true"
+                  value={inputVal}
+                  onChange={(e) => setInputVal(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  onFocus={() => setInputVal("")}
+                  onKeyDown={(e) => e.key === "Enter" && handleAddSubmit()}
+                  placeholder="1430"
+                  className="bg-bg border-[1.5px] border-amberCustom rounded-lg p-[8px_44px_8px_10px] text-amberCustom text-[20px] font-mono tracking-[2px] outline-none w-full box-border animate-none"
+                />
+                {parsedInput && (
+                  <div className="absolute right-2.5 top-1/2 -translate-y-1/2 font-mono text-[10px] text-amberDim pointer-events-none animate-none">
+                    {parsedInput.str}
+                  </div>
+                )}
+              </div>
               <input
                 type="text"
                 name="cd-item-label"
@@ -2146,6 +2144,9 @@
             </div>
 
             {/* 2. タイムショートカット */}
+            <div style={{ ...labelStyle, fontSize: 8, marginBottom: 4 }}>
+              プリセット <span className="opacity-40">長押しで編集</span>
+            </div>
             <div className="flex gap-[4px] items-center overflow-x-auto pb-1 mb-1.5 no-scrollbar">
               {presets.map((p, idx) => {
                 const isSelected = selectedPresetMs === p.ms && !customInput;
@@ -2168,35 +2169,33 @@
               </button>
             </div>
 
-            {/* 3. 時間入力(コンパクト・主役・リアルタイムプレビュー) */}
-            <div className="relative w-[145px] mb-1.5">
-              <input
-                type="text"
-                name="tm-custom-duration"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="none"
-                spellCheck={false}
-                data-form-type="other"
-                data-lpignore="true"
-                value={customInput}
-                onChange={(e) => { setCustomInput(e.target.value.replace(/\D/g, "").slice(0, 6)); setSelectedPresetMs(0); }}
-                onFocus={() => setCustomInput("")}
-                onKeyDown={(e) => e.key === "Enter" && createTimer()}
-                placeholder="0300"
-                className="bg-bg border-[1.5px] border-blueCustom rounded-lg p-[8px_44px_8px_10px] text-blueCustom text-[20px] font-mono tracking-[2px] outline-none w-full box-border"
-              />
-              {parsedCustom && (
-                <div className="absolute right-2.5 top-1/2 -translate-y-1/2 font-mono text-[10px] text-blueCustom opacity-50 pointer-events-none">
-                  {parsedCustom.str}
-                </div>
-              )}
-            </div>
-
-            {/* 4. ラベル入力 */}
+            {/* 3+4. 時間入力(コンパクト・主役・リアルタイムプレビュー) + ラベル入力 */}
             <div className="flex gap-1.5 mb-1.5">
+              <div className="relative w-[145px] shrink-0">
+                <input
+                  type="text"
+                  name="tm-custom-duration"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  data-form-type="other"
+                  data-lpignore="true"
+                  value={customInput}
+                  onChange={(e) => { setCustomInput(e.target.value.replace(/\D/g, "").slice(0, 6)); setSelectedPresetMs(0); }}
+                  onFocus={() => setCustomInput("")}
+                  onKeyDown={(e) => e.key === "Enter" && createTimer()}
+                  placeholder="0300"
+                  className="bg-bg border-[1.5px] border-blueCustom rounded-lg p-[8px_44px_8px_10px] text-blueCustom text-[20px] font-mono tracking-[2px] outline-none w-full box-border"
+                />
+                {parsedCustom && (
+                  <div className="absolute right-2.5 top-1/2 -translate-y-1/2 font-mono text-[10px] text-blueCustom opacity-50 pointer-events-none">
+                    {parsedCustom.str}
+                  </div>
+                )}
+              </div>
               <input
                 type="text"
                 name="tm-item-label"
