@@ -116,7 +116,7 @@
         height: 74px !important;
       }
       .tm-card-h {
-        height: 100px !important;
+        height: 76px !important;
       }
       .font-cd-digits {
         font-size: clamp(26px, 8.5vw, 36px) !important;
@@ -1273,7 +1273,7 @@
                 type="text"
                 name="cd-item-label"
                 readOnly
-                onFocus={(e) => e.target.removeAttribute("readonly")}
+                onPointerDown={(e) => e.target.removeAttribute("readonly")}
                 value={labelVal}
                 onChange={(e) => setLabelVal(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleAddSubmit()}
@@ -1493,7 +1493,7 @@
                   type="text"
                   name="cd-preset-title"
                   readOnly
-                  onFocus={(e) => e.target.removeAttribute("readonly")}
+                  onPointerDown={(e) => e.target.removeAttribute("readonly")}
                   autoComplete="off"
                   autoCorrect="off"
                   autoCapitalize="none"
@@ -1696,7 +1696,7 @@
         : formattedTotal;
 
       return (
-        <div data-id={timer.id} className="relative overflow-hidden rounded-xl mb-[6px] select-none tm-card-h" style={{ height: '102px' }}>
+        <div data-id={timer.id} className="relative overflow-hidden rounded-xl mb-[6px] select-none tm-card-h" style={{ height: '80px' }}>
           {/* 右スワイプ裏レイヤー: 経過時間 */}
           <div 
             className="absolute inset-y-0 left-0 flex items-center justify-center bg-blueGlow border-r border-blueCustom/20 no-drag rounded-l-xl transition-opacity duration-150"
@@ -1828,7 +1828,7 @@
                 </div>
               </div>
 
-              <div className="flex flex-col gap-[4px] shrink-0 w-[68px] sm:w-[76px] no-drag">
+              <div className="flex flex-col gap-[3px] shrink-0 w-[68px] sm:w-[76px] no-drag">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -1836,7 +1836,7 @@
                     onUpdate({ ...timer, running: false, remaining: timer.totalMs, done: false });
                   }}
                   disabled={timer.running}
-                  className="w-full h-[32px] p-0 bg-surface border border-border rounded-[8px] text-mutedCustom text-[14px] font-sans flex items-center justify-center disabled:opacity-25"
+                  className="w-full h-[24px] p-0 bg-surface border border-border rounded-[8px] text-mutedCustom text-[13px] font-sans flex items-center justify-center disabled:opacity-25"
                   style={{ cursor: timer.running ? 'not-allowed' : 'pointer' }}
                 >
                   ↺
@@ -1845,10 +1845,13 @@
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      const limit = virtualNow + (timer.remaining > 0 ? timer.remaining : timer.totalMs);
+                      // 停止中はこのカードが再レンダリングされず virtualNow が古いままになるため、
+                      // 再開の瞬間の実時刻を取り直してから endAt を計算する
+                      const freshNow = Date.now() + timeOffset;
+                      const limit = freshNow + (timer.remaining > 0 ? timer.remaining : timer.totalMs);
                       onUpdate({ ...timer, running: true, endAt: limit, done: false });
                     }}
-                    className="w-full h-[48px] bg-blueGlow border border-blueCustom rounded-lg text-blueCustom text-[11px] font-sans font-bold tracking-[1px] cursor-pointer flex items-center justify-center"
+                    className="w-full h-[37px] bg-blueGlow border border-blueCustom rounded-lg text-blueCustom text-[11px] font-sans font-bold tracking-[1px] cursor-pointer flex items-center justify-center"
                   >
                     {timer.remaining > 0 && timer.remaining < timer.totalMs ? "▶再開" : "▶開始"}
                   </button>
@@ -1859,7 +1862,7 @@
                       e.stopPropagation();
                       onUpdate({ ...timer, running: false, remaining: deltaMs });
                     }}
-                    className="w-full h-[48px] rounded-lg text-[11px] font-sans font-bold tracking-[1px] cursor-pointer flex items-center justify-center"
+                    className="w-full h-[37px] rounded-lg text-[11px] font-sans font-bold tracking-[1px] cursor-pointer flex items-center justify-center"
                     style={{
                       background: isOver ? "rgba(255,74,74,0.2)" : colors.amberGlow,
                       border: `1px solid ${isOver ? colors.red : colors.amber}`,
@@ -1870,7 +1873,7 @@
                   </button>
                 )}
                 {timer.done && (
-                  <div className="w-full h-[48px] flex items-center justify-center text-greenCustom text-[11px] font-sans font-bold">
+                  <div className="w-full h-[37px] flex items-center justify-center text-greenCustom text-[11px] font-sans font-bold">
                     ✓完了
                   </div>
                 )}
@@ -2201,7 +2204,7 @@
                 type="text"
                 name="tm-item-label"
                 readOnly
-                onFocus={(e) => e.target.removeAttribute("readonly")}
+                onPointerDown={(e) => e.target.removeAttribute("readonly")}
                 value={labelVal}
                 onChange={(e) => setLabelVal(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && createTimer()}
@@ -2445,7 +2448,7 @@
                   type="text"
                   name="tm-preset-title"
                   readOnly
-                  onFocus={(e) => e.target.removeAttribute("readonly")}
+                  onPointerDown={(e) => e.target.removeAttribute("readonly")}
                   autoComplete="off"
                   autoCorrect="off"
                   autoCapitalize="none"
