@@ -355,7 +355,7 @@
       return rect;
     }
 
-    function QuickLabelChip({ word, onSelect, onLongPress }) {
+    function QuickLabelChip({ word, onSelect, onLongPress, onLongPressEnd }) {
       const timerRef = useRef(null);
       const isLongPress = useRef(false);
 
@@ -365,14 +365,15 @@
         timerRef.current = setTimeout(() => {
           isLongPress.current = true;
           if (navigator.vibrate) navigator.vibrate(40);
+          onLongPress(word);
         }, 500);
       };
 
       const handlePointerUp = () => {
         clearTimeout(timerRef.current);
         if (isLongPress.current) {
-          // 指を離した瞬間(本物のタップ扱い)に編集モーダルを開く
-          onLongPress(word);
+          // 指を離した瞬間(本物のタップ扱い)にキーボードを呼ぶ。モーダル自体は長押し確定時に既に表示済み
+          if (onLongPressEnd) onLongPressEnd();
         } else {
           onSelect(word);
         }
@@ -413,6 +414,7 @@
         timerRef.current = setTimeout(() => {
           isLongPress.current = true;
           setInputValue(String(isActive ? value : backupVal.current));
+          setShowModal(true);
         }, 500);
       };
 
@@ -426,8 +428,7 @@
             onChange(backupVal.current || 2);
           }
         } else {
-          // 指を離した瞬間(本物のタップ扱い)にモーダル表示とキーボード表示をまとめて行う
-          ReactDOM.flushSync(() => setShowModal(true));
+          // 指を離した瞬間(本物のタップ扱い)にキーボードを呼ぶ。モーダル自体は長押し確定時に既に表示済み
           modalInputRef.current?.focus();
         }
       };
@@ -559,6 +560,7 @@
         longPressTimerRef.current = setTimeout(() => {
           isLongPressed.current = true;
           setInputValue(`${pad(targetTime.getHours())}${pad(targetTime.getMinutes())}${pad(targetTime.getSeconds())}`);
+          setShowModal(true);
           if (navigator.vibrate) navigator.vibrate(40);
         }, 600);
       };
@@ -574,8 +576,7 @@
         }
         if (isLongPressed.current) {
           isLongPressed.current = false;
-          // 指を離した瞬間(本物のタップ扱い)にモーダル表示とキーボード表示をまとめて行う
-          ReactDOM.flushSync(() => setShowModal(true));
+          // 指を離した瞬間(本物のタップ扱い)にキーボードを呼ぶ。モーダル自体は長押し確定時に既に表示済み
           modalInputRef.current?.focus();
           return;
         }
@@ -692,7 +693,7 @@
       );
     }
 
-    function PresetKey({ preset, onTap, onLongPress }) {
+    function PresetKey({ preset, onTap, onLongPress, onLongPressEnd }) {
       const timerRef = useRef(null);
       const isLongPress = useRef(false);
 
@@ -709,6 +710,9 @@
         clearTimeout(timerRef.current);
         if (!isLongPress.current) {
           onTap();
+        } else if (onLongPressEnd) {
+          // 指を離した瞬間(本物のタップ扱い)にキーボードを呼ぶ。モーダル自体は長押し確定時に既に表示済み
+          onLongPressEnd();
         }
       };
 
@@ -1066,6 +1070,7 @@
       const inputRef = useRef(null);
       const scrollContainerRef = useRef(null);
       const wordModalInputRef = useRef(null);
+      const presetModalInputRef = useRef(null);
 
       const wordModalViewport = useKeyboardSafeViewport(wordEditTarget !== null);
 
@@ -1219,6 +1224,7 @@
                   preset={p} 
                   onTap={() => addTarget(p.raw, p.label)} 
                   onLongPress={() => openEditPresetDialog(p, idx)}
+                  onLongPressEnd={() => presetModalInputRef.current?.focus()}
                 />
               ))}
               <button
@@ -1301,12 +1307,10 @@
                   word={w}
                   onSelect={(word) => setLabelVal(word)}
                   onLongPress={() => {
-                    ReactDOM.flushSync(() => {
-                      setWordEditTarget(idx);
-                      setWordEditInput(w);
-                    });
-                    wordModalInputRef.current?.focus();
+                    setWordEditTarget(idx);
+                    setWordEditInput(w);
                   }}
+                  onLongPressEnd={() => wordModalInputRef.current?.focus()}
                 />
               ))}
             </div>
@@ -1466,6 +1470,7 @@
                 <label className="text-[9px] text-mutedLight tracking-[1px] mb-1 block">時刻 (例: 143000 → 14時30分00秒)</label>
                 <input
                   autoFocus
+                  ref={presetModalInputRef}
                   type="text"
                   name="cd-preset-digits"
                   inputMode="numeric"
@@ -1887,7 +1892,7 @@
       );
     }
 
-    function CustomPresetButton({ preset, isSelected, onTap, onLongPress }) {
+    function CustomPresetButton({ preset, isSelected, onTap, onLongPress, onLongPressEnd }) {
       const timerRef = useRef(null);
       const isLongPress = useRef(false);
 
@@ -1904,6 +1909,9 @@
         clearTimeout(timerRef.current);
         if (!isLongPress.current) {
           onTap();
+        } else if (onLongPressEnd) {
+          // 指を離した瞬間(本物のタップ扱い)にキーボードを呼ぶ。モーダル自体は長押し確定時に既に表示済み
+          onLongPressEnd();
         }
       };
 
@@ -1956,6 +1964,7 @@
 
       const scrollContainerRef = useRef(null);
       const tmWordModalInputRef = useRef(null);
+      const tmPresetModalInputRef = useRef(null);
 
       const tmWordModalViewport = useKeyboardSafeViewport(wordEditTarget !== null);
 
@@ -2142,6 +2151,7 @@
                       isSelected={isSelected}
                       onTap={() => { addTimerDirect(p.ms, p.l); }} 
                       onLongPress={() => openEditPresetDialog(p, idx)}
+                      onLongPressEnd={() => tmPresetModalInputRef.current?.focus()}
                     />
                   );
                 })}
@@ -2215,12 +2225,10 @@
                   word={w}
                   onSelect={(word) => setLabelVal(word)}
                   onLongPress={() => {
-                    ReactDOM.flushSync(() => {
-                      setWordEditTarget(idx);
-                      setWordEditInput(w);
-                    });
-                    tmWordModalInputRef.current?.focus();
+                    setWordEditTarget(idx);
+                    setWordEditInput(w);
                   }}
+                  onLongPressEnd={() => tmWordModalInputRef.current?.focus()}
                 />
               ))}
             </div>
@@ -2405,6 +2413,7 @@
                 <label className="text-[9px] text-mutedLight tracking-[1px] mb-1 block">設定時間 (例: 0500 → 5分)</label>
                 <input
                   autoFocus
+                  ref={tmPresetModalInputRef}
                   type="text"
                   name="tm-preset-duration"
                   inputMode="numeric"
@@ -2608,12 +2617,12 @@
                 }
               }}
             >
-              <div className="font-mono text-[14vw] sm:text-[56px] tracking-[1px] leading-none transition-colors duration-300"
+              <div className="font-mono text-[11px] text-mutedCustom tracking-[1px] text-left pl-2">
+                TOTAL{laps.length > 0 ? `  Lap ${laps.length + 1}` : ""}  /  {isTotalShort ? formatTimeMs(elapsed) : formatTime(elapsed)}
+              </div>
+              <div className="font-mono text-[14vw] sm:text-[56px] tracking-[1px] leading-none transition-colors duration-300 mt-1"
                    style={{ color: running ? colors.green : currentLapTime > 0 ? colors.amber : colors.white }}>
                 {isLapShort ? formatTimeMs(currentLapTime) : formatTime(currentLapTime)}
-              </div>
-              <div className="font-mono text-[11px] text-mutedCustom mt-1 tracking-[1px]">
-                TOTAL{laps.length > 0 ? `  Lap ${laps.length + 1}` : ""}  /  {isTotalShort ? formatTimeMs(elapsed) : formatTime(elapsed)}
               </div>
             </div>
           </div>
