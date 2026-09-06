@@ -1273,6 +1273,8 @@
               <input
                 type="text"
                 name="cd-item-label"
+                readOnly
+                onFocus={(e) => e.target.removeAttribute("readonly")}
                 value={labelVal}
                 onChange={(e) => setLabelVal(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleAddSubmit()}
@@ -2193,6 +2195,8 @@
               <input
                 type="text"
                 name="tm-item-label"
+                readOnly
+                onFocus={(e) => e.target.removeAttribute("readonly")}
                 value={labelVal}
                 onChange={(e) => setLabelVal(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && createTimer()}
@@ -2567,9 +2571,6 @@
 
       const lastLapTotal = laps.length > 0 ? laps[laps.length - 1].total : 0;
       const currentLapTime = elapsed - lastLapTotal;
-      const isLapShort = currentLapTime < 60000;
-      const isTotalShort = elapsed < 60000;
-
       const formatLapNum = (num) => diffMode ? `${num}→${num + 1}` : `#${num}`;
 
       return (
@@ -2581,7 +2582,7 @@
             <button
               onClick={resetAll}
               disabled={elapsed === 0}
-              className="absolute top-2 left-2.5 px-[8px] py-[2px] bg-transparent border rounded-[6px] text-[8px] tracking-[1px] font-mono font-bold transition-all duration-150"
+              className="absolute top-2 left-2.5 px-[10px] py-[3px] bg-transparent border rounded-[6px] text-[9px] tracking-[1px] font-mono font-bold transition-all duration-150"
               style={{
                 borderColor: elapsed > 0 ? colors.border : colors.border + "44",
                 color: elapsed > 0 ? colors.muted : colors.gray,
@@ -2594,7 +2595,7 @@
             {/* 赤枠位置: メイン枠内・左下に#1ボタンを配置（LAP1ボタンと重ならず隙間を確保） */}
             <button
               onClick={() => setDiffMode(prev => !prev)}
-              className="absolute bottom-2 left-2.5 px-2 py-0.5 bg-surface border rounded-[6px] text-[9px] tracking-[1px] font-mono font-bold transition-all duration-150 flex items-center gap-1 z-20 no-drag active:scale-95"
+              className="absolute bottom-2 left-2.5 px-2.5 py-1 bg-surface border rounded-[6px] text-[10px] tracking-[1px] font-mono font-bold transition-all duration-150 flex items-center gap-1 z-20 no-drag active:scale-95"
               style={{
                 borderColor: diffMode ? colors.amber : colors.border,
                 color: diffMode ? colors.amber : colors.muted
@@ -2617,12 +2618,15 @@
                 }
               }}
             >
-              <div className="font-mono text-[11px] text-mutedCustom tracking-[1px] text-left pl-2">
-                TOTAL{laps.length > 0 ? `  Lap ${laps.length + 1}` : ""}  /  {isTotalShort ? formatTimeMs(elapsed) : formatTime(elapsed)}
+              <div className="font-mono text-[11px] text-mutedCustom tracking-[1px] text-left pl-[62px]">
+                TOTAL  /  {formatTimeMs(elapsed)}
               </div>
-              <div className="font-mono text-[14vw] sm:text-[56px] tracking-[1px] leading-none transition-colors duration-300 mt-1"
-                   style={{ color: running ? colors.green : currentLapTime > 0 ? colors.amber : colors.white }}>
-                {isLapShort ? formatTimeMs(currentLapTime) : formatTime(currentLapTime)}
+              <div className="flex items-center justify-center gap-2 mt-4">
+                <span className="font-mono text-[11px] text-mutedCustom tracking-[1px]">LAP {laps.length + 1}</span>
+                <div className="font-mono text-[14vw] sm:text-[56px] tracking-[1px] leading-none transition-colors duration-300"
+                     style={{ color: running ? colors.green : currentLapTime > 0 ? colors.amber : colors.white }}>
+                  {formatTimeMs(currentLapTime)}
+                </div>
               </div>
             </div>
           </div>
