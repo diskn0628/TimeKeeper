@@ -3727,9 +3727,58 @@
         { id: "sw", label: "SW", icon: "⏱" },
         { id: "calc", label: "CALC", icon: "🧮" }
       ];
+      const tabOrder = tabItems.map(t => t.id);
+
+      // 二本指スワイプでタブを循環切り替え(左スワイプ→右隣のタブへ、右スワイプ→左隣のタブへ)
+      const twoFingerSwipeRef = useRef({ active: false, startX: 0, startY: 0, curX: 0, curY: 0 });
+
+      const getTouchMidpoint = (touches) => ({
+        x: (touches[0].clientX + touches[1].clientX) / 2,
+        y: (touches[0].clientY + touches[1].clientY) / 2
+      });
+
+      const handleTabSwipeStart = (e) => {
+        if (e.touches.length === 2) {
+          const mid = getTouchMidpoint(e.touches);
+          twoFingerSwipeRef.current = { active: true, startX: mid.x, startY: mid.y, curX: mid.x, curY: mid.y };
+        } else {
+          twoFingerSwipeRef.current.active = false;
+        }
+      };
+
+      const handleTabSwipeMove = (e) => {
+        if (twoFingerSwipeRef.current.active && e.touches.length === 2) {
+          const mid = getTouchMidpoint(e.touches);
+          twoFingerSwipeRef.current.curX = mid.x;
+          twoFingerSwipeRef.current.curY = mid.y;
+        }
+      };
+
+      const handleTabSwipeEnd = () => {
+        const state = twoFingerSwipeRef.current;
+        if (state.active) {
+          const dx = state.curX - state.startX;
+          const dy = state.curY - state.startY;
+          const SWIPE_THRESHOLD = 60;
+          if (Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy) * 1.5) {
+            const idx = tabOrder.indexOf(currentTab);
+            const nextIdx = dx < 0
+              ? (idx + 1) % tabOrder.length
+              : (idx - 1 + tabOrder.length) % tabOrder.length;
+            setCurrentTab(tabOrder[nextIdx]);
+          }
+        }
+        state.active = false;
+      };
 
       return (
-        <div className="h-full bg-bg text-white font-sans w-full max-w-[440px] mx-auto flex flex-col overflow-hidden select-none">
+        <div
+          className="h-full bg-bg text-white font-sans w-full max-w-[440px] mx-auto flex flex-col overflow-hidden select-none"
+          onTouchStart={handleTabSwipeStart}
+          onTouchMove={handleTabSwipeMove}
+          onTouchEnd={handleTabSwipeEnd}
+          onTouchCancel={handleTabSwipeEnd}
+        >
           <div className="flex justify-between items-center px-2 py-1.5 border-b border-border bg-bg shrink-0 z-50">
             <div className="flex gap-1">
               {tabItems.map(tab => {
