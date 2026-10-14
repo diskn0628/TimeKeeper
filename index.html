@@ -3786,14 +3786,14 @@
           onTouchCancel={handleTabSwipeEnd}
         >
           <div className="flex justify-between items-center px-2 py-1.5 border-b border-border bg-bg shrink-0 z-50">
-            <div className="flex gap-1">
+            <div className="flex gap-[3px]">
               {tabItems.map(tab => {
                 const isActive = currentTab === tab.id;
                 return (
                   <button
                     key={tab.id}
                     onClick={() => setCurrentTab(tab.id)}
-                    className="flex items-center gap-[2px] p-[3px_5px] bg-transparent border rounded-[6px] text-[8.5px] tracking-[0.5px] font-sans transition-all duration-150"
+                    className="flex flex-col items-center justify-center gap-[1px] min-w-[42px] h-[48px] px-[3px] bg-transparent border rounded-[8px] text-[10px] tracking-[0.3px] font-sans transition-all duration-150 active:scale-95"
                     style={{
                       background: isActive ? colors.amberGlow : 'none',
                       borderColor: isActive ? colors.amber : colors.border,
@@ -3801,8 +3801,8 @@
                       fontWeight: isActive ? 700 : 400
                     }}
                   >
-                    <span className="text-[11px]">{tab.icon}</span>
-                    <span>{tab.label}</span>
+                    <span className="text-[17px] leading-none">{tab.icon}</span>
+                    <span className="leading-none">{tab.label}</span>
                   </button>
                 );
               })}
